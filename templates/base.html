@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SplitWise — New Trip</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <!-- Animated mesh background -->
+  <div class="bg-mesh">
+    <div class="mesh-orb orb-1"></div>
+    <div class="mesh-orb orb-2"></div>
+    <div class="mesh-orb orb-3"></div>
+  </div>
+
+  <!-- Noise grain overlay -->
+  <div class="grain"></div>
+
+  <!-- Main stage -->
+  <div class="stage">
+
+    <!-- Hero text -->
+    <div class="hero" id="heroText">
+      <p class="hero-label">TRIP EXPENSE TRACKER</p>
+      <h1 class="hero-title">Split bills,<br><span class="hero-accent">not friendships.</span></h1>
+      <p class="hero-sub">Track shared expenses effortlessly across any group trip.</p>
+      <button id="newTripBtn" class="cta-btn">
+        <span class="cta-icon">+</span>
+        New Trip
+      </button>
+    </div>
+
+    <!-- ── STEP 1: Trip Name ── -->
+    <div id="tripBox" class="modal hidden">
+      <div class="modal-step">STEP 1 OF 3</div>
+      <h2 class="modal-title">Name your trip</h2>
+      <p class="modal-hint">Give it something memorable.</p>
+      <input type="text" id="tripNameInput" class="field" placeholder="e.g. Goa 2025, Euro Trip…" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="cancelBtn" class="btn-ghost">Cancel</button>
+        <button id="saveBtn" class="btn-primary">Continue →</button>
+      </div>
+    </div>
+
+    <!-- ── STEP 2: Member Count ── -->
+    <div id="memberCountBox" class="modal hidden">
+      <div class="modal-step">STEP 2 OF 3</div>
+      <h2 class="modal-title">How many people?</h2>
+      <p class="modal-hint">Including yourself.</p>
+      <input type="number" id="memberCountInput" class="field" placeholder="e.g. 4" min="1" max="20" />
+      <div class="modal-actions">
+        <button id="backBtn" class="btn-ghost">← Back</button>
+        <button id="nextBtn" class="btn-primary">Continue →</button>
+      </div>
+    </div>
+
+    <!-- ── STEP 3: Member Names ── -->
+    <div id="memberNamesBox" class="modal hidden">
+      <div class="modal-step">STEP 3 OF 3</div>
+      <h2 class="modal-title">Enter member names</h2>
+      <p class="modal-hint">One name per person.</p>
+      <form id="memberForm" class="name-form"></form>
+      <div class="modal-actions">
+        <button id="prevBtn" class="btn-ghost">← Back</button>
+        <button id="saveMembersBtn" class="btn-primary">Create Trip ✓</button>
+      </div>
+    </div>
+
+  </div><!-- /stage -->
+
+  <script>
+    const newTripBtn     = document.getElementById("newTripBtn");
+    const tripBox        = document.getElementById("tripBox");
+    const cancelBtn      = document.getElementById("cancelBtn");
+    const saveBtn        = document.getElementById("saveBtn");
+    const memberCountBox = document.getElementById("memberCountBox");
+    const memberNamesBox = document.getElementById("memberNamesBox");
+    const nextBtn        = document.getElementById("nextBtn");
+    const backBtn        = document.getElementById("backBtn");
+    const prevBtn        = document.getElementById("prevBtn");
+    const saveMembersBtn = document.getElementById("saveMembersBtn");
+    const memberForm     = document.getElementById("memberForm");
+    const heroText       = document.getElementById("heroText");
+    let count;
+
+    function showModal(modal) {
+      modal.classList.remove("hidden");
+      modal.classList.add("modal-enter");
+    }
+    function hideModal(modal) {
+      modal.classList.add("hidden");
+      modal.classList.remove("modal-enter");
+    }
+
+    newTripBtn.addEventListener("click", () => {
+      heroText.style.opacity = "0";
+      heroText.style.transform = "translateY(-16px)";
+      setTimeout(() => heroText.style.display = "none", 280);
+      setTimeout(() => showModal(tripBox), 200);
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      hideModal(tripBox);
+      heroText.style.display = "";
+      setTimeout(() => { heroText.style.opacity = "1"; heroText.style.transform = ""; }, 20);
+    });
+
+    saveBtn.addEventListener("click", async () => {
+      const tripName = document.getElementById("tripNameInput").value.trim();
+      if (!tripName) { shakeField("tripNameInput"); return; }
+
+      await fetch("/save_trip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripName })
+      });
+
+      hideModal(tripBox);
+      setTimeout(() => showModal(memberCountBox), 120);
+    });
+
+    nextBtn.addEventListener("click", () => {
+      count = Number(document.getElementById("memberCountInput").value);
+      if (!count || count <= 0) { shakeField("memberCountInput"); return; }
+
+      memberForm.innerHTML = "";
+      for (let i = 1; i <= count; i++) {
+        const wrap  = document.createElement("div");
+        wrap.className = "name-row";
+        const label = document.createElement("span");
+        label.className = "name-num";
+        label.textContent = i;
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = `Member ${i}`;
+        input.classList.add("field", "member-input");
+        wrap.appendChild(label);
+        wrap.appendChild(input);
+        memberForm.appendChild(wrap);
+      }
+      hideModal(memberCountBox);
+      setTimeout(() => showModal(memberNamesBox), 120);
+    });
+
+    backBtn.addEventListener("click", () => {
+      hideModal(memberCountBox);
+      setTimeout(() => showModal(tripBox), 120);
+    });
+
+    prevBtn.addEventListener("click", () => {
+      hideModal(memberNamesBox);
+      setTimeout(() => showModal(memberCountBox), 120);
+    });
+
+    saveMembersBtn.addEventListener("click", async () => {
+      const inputs  = document.querySelectorAll(".member-input");
+      const members = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
+      if (members.length < count) { alert("Please fill in all member names."); return; }
+      const lower = members.map(n => n.toLowerCase());
+      if (new Set(lower).size !== lower.length) { alert("Names must be unique."); return; }
+
+      saveMembersBtn.textContent = "Saving…";
+      saveMembersBtn.disabled = true;
+
+      await fetch("/save_members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ members })
+      });
+
+      window.location.href = "/dashboard";
+    });
+
+    // Enter key navigation
+    document.addEventListener("keydown", e => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (!tripBox.classList.contains("hidden"))        saveBtn.click();
+      else if (!memberCountBox.classList.contains("hidden")) nextBtn.click();
+      else if (!memberNamesBox.classList.contains("hidden")) saveMembersBtn.click();
+    });
+
+    function shakeField(id) {
+      const el = document.getElementById(id);
+      el.classList.add("shake");
+      el.focus();
+      setTimeout(() => el.classList.remove("shake"), 500);
+    }
+  </script>
+</body>
+</html>

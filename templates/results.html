@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trip Summary</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/results.css') }}" />
+</head>
+<body>
+
+  <div class="bg-mesh">
+    <div class="mesh-orb orb-1"></div>
+    <div class="mesh-orb orb-2"></div>
+    <div class="mesh-orb orb-3"></div>
+  </div>
+  <div class="grain"></div>
+
+  <div class="results-wrap">
+
+    <!-- Header -->
+    <header class="results-header">
+      <p class="results-label">TRIP SUMMARY</p>
+      <h1 class="results-title">Here's how<br><span class="results-accent">the money moved.</span></h1>
+
+      <!-- Status pill -->
+      <div class="status-pill {% if 'no data' in message|lower %}pill-error{% else %}pill-ok{% endif %}">
+        {% if 'no data' in message|lower %}
+          ⚠ No data available
+        {% else %}
+          ✓ Summary generated successfully
+        {% endif %}
+      </div>
+    </header>
+
+    <!-- ── TOTAL SPENT ── -->
+    {% if totspent %}
+    <section class="results-section" style="animation-delay: 0.1s">
+      <div class="section-heading">
+        <span class="section-icon spent-icon">💸</span>
+        <h2>Total Spent Per Member</h2>
+      </div>
+      <div class="spent-grid">
+        {% for item in totspent %}
+        {% set parts = item.split(' : ') %}
+        {% set mem = parts[0].strip() %}
+        {% set amt = parts[1].strip() if parts|length > 1 else '₹0' %}
+        <div class="spent-card">
+          <div class="spent-avatar">{{ mem[0] | upper }}</div>
+          <div class="spent-info">
+            <span class="spent-name">{{ mem }}</span>
+            <span class="spent-amount">{{ amt }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- ── TRANSACTIONS ── -->
+    {% if transactions %}
+    <section class="results-section" style="animation-delay: 0.2s">
+      <div class="section-heading">
+        <span class="section-icon txn-icon">🧾</span>
+        <h2>All Transactions</h2>
+      </div>
+      <div class="txn-list">
+        {% for t in transactions %}
+        {% set arrow_split = t.split(' -> ') %}
+        {% set main_info   = arrow_split[0] %}
+        {% set splits_info = arrow_split[1] if arrow_split|length > 1 else '' %}
+        {% set dash_split  = main_info.split(' - ₹') %}
+        {% set reason      = dash_split[0] %}
+        {% set rest        = dash_split[1] if dash_split|length > 1 else '' %}
+        {% set paid_split  = rest.split(' paid by ') if rest else ['', ''] %}
+        {% set amount      = paid_split[0] %}
+        {% set paid_by     = paid_split[1] if paid_split|length > 1 else '' %}
+        <div class="txn-card" data-transaction="{{ t }}">
+          <div class="txn-top">
+            <div class="txn-left">
+              <p class="txn-reason">{{ reason }}</p>
+              <p class="txn-payer">Paid by <strong>{{ paid_by }}</strong></p>
+            </div>
+            <div class="txn-amount">₹{{ amount }}</div>
+          </div>
+          {% if splits_info %}
+          <div class="txn-divider"></div>
+          <div class="txn-splits">
+            <p class="splits-label">Split breakdown</p>
+            <div class="splits-grid" data-splits="{{ splits_info }}">
+              <!-- populated by JS -->
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- ── WHO PAYS WHOM ── -->
+    {% if payday %}
+    <section class="results-section" style="animation-delay: 0.3s">
+      <div class="section-heading">
+        <span class="section-icon settle-icon">💳</span>
+        <h2>Settlements</h2>
+      </div>
+      <div class="settle-list">
+        {% for p in payday %}
+        {% set paytext = p %}
+        {% set parts   = paytext.split(' has to pay ₹') %}
+        {% if parts|length > 1 %}
+          {% set payer  = parts[0].strip() %}
+          {% set rest2  = parts[1] %}
+          {% set ar     = rest2.split(' to ') %}
+          {% set amount = ar[0].strip() %}
+          {% set recip  = ar[1].strip() if ar|length > 1 else '' %}
+        {% else %}
+          {% set payer = '' %}{% set amount = '' %}{% set recip = '' %}
+        {% endif %}
+        {% if payer and recip and amount %}
+        <div class="settle-card">
+          <div class="settle-person payer-side">
+            <div class="settle-avatar payer-av">{{ payer[0]|upper }}</div>
+            <span class="settle-name">{{ payer }}</span>
+          </div>
+          <div class="settle-arrow">
+            <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
+              <path d="M1 7h28M23 1l7 6-7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="settle-amt">₹{{ amount }}</span>
+          </div>
+          <div class="settle-person recip-side">
+            <div class="settle-avatar recip-av">{{ recip[0]|upper }}</div>
+            <span class="settle-name">{{ recip }}</span>
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <div class="results-footer">
+      <a href="/" class="home-btn">← New Trip</a>
+    </div>
+
+  </div><!-- /results-wrap -->
+
+  <script>
+    // Parse and render split breakdowns
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.splits-grid').forEach(grid => {
+        const raw = grid.getAttribute('data-splits') || '';
+        const pairRegex = /\[\s*['"]([^'"]+)['"]\s*,\s*([\d.]+)\s*\]/g;
+        const matches = [];
+        let m;
+        while ((m = pairRegex.exec(raw)) !== null) {
+          matches.push({ person: m[1].trim(), amount: parseFloat(m[2]) });
+        }
+        // Fallback parser
+        if (matches.length === 0) {
+          const alt = /\[([^,\]]+),\s*([\d.]+)\]/g;
+          while ((m = alt.exec(raw)) !== null) {
+            matches.push({ person: m[1].replace(/['"]/g,'').trim(), amount: parseFloat(m[2]) });
+          }
+        }
+        grid.innerHTML = '';
+        matches.forEach(({ person, amount }) => {
+          const chip = document.createElement('div');
+          chip.className = 'split-chip';
+          chip.innerHTML = `<span class="chip-av">${person[0].toUpperCase()}</span>
+                            <span class="chip-name">${person}</span>
+                            <span class="chip-amt">₹${amount.toFixed(2)}</span>`;
+          grid.appendChild(chip);
+        });
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{ trip_name }} — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <!-- members array used by dashboard.js -->
+  <script>
+    const members = {{ members | tojson }};
+  </script>
+</head>
+<body class="dashboard-body">
+
+  <!-- Ambient background -->
+  <div class="bg-mesh dashboard-mesh">
+    <div class="mesh-orb orb-1"></div>
+    <div class="mesh-orb orb-3"></div>
+  </div>
+  <div class="grain"></div>
+
+  <!-- ── NAVBAR ── -->
+  <nav class="topbar">
+    <button class="icon-btn" id="billBtn" title="View spending so far">
+      <!-- wallet icon -->
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="5" width="20" height="14" rx="2"/>
+        <path d="M16 12h.01"/>
+        <path d="M2 10h20"/>
+      </svg>
+    </button>
+
+    <h1 class="topbar-title">{{ trip_name | upper }}</h1>
+
+    <div class="topbar-right">
+      <button class="btn-add" id="addExpenseBtn">+ Add Expense</button>
+      <button class="btn-finish" id="FinishBtn">Finish Trip</button>
+    </div>
+  </nav>
+
+  <!-- ── ADD EXPENSE MODAL ── -->
+  <div class="modal-backdrop hidden" id="expenseBackdrop"></div>
+
+  <div id="expenseForm" class="side-modal hidden">
+    <div class="side-modal-header">
+      <h2 class="side-modal-title">Add Expense</h2>
+      <button id="cancelExpenseBtn" class="close-btn" aria-label="Close">✕</button>
+    </div>
+
+    <div class="side-modal-body">
+      <label class="field-label">Reason</label>
+      <input type="text" id="expenseReason" class="field" placeholder="e.g. Dinner, Fuel, Hotel…" autocomplete="off" />
+
+      <label class="field-label">Total Amount (₹)</label>
+      <input type="number" id="expenseAmount" class="field" placeholder="0.00" />
+
+      <label class="field-label">Who paid?</label>
+      <input type="text" id="paidby" class="field" list="memberslist" placeholder="Select a member" autocomplete="off" />
+      <datalist id="memberslist">
+        {% for member in members %}
+        <option value="{{ member }}">
+        {% endfor %}
+      </datalist>
+
+      <!-- Equal / Unequal toggle -->
+      <label class="field-label">Split type</label>
+      <div class="toggle-group">
+        <label class="toggle-opt active" id="equalLabel">
+          <input type="radio" name="shareType" value="equal" checked hidden>
+          <span class="toggle-icon">⚖</span> Equal
+        </label>
+        <label class="toggle-opt" id="unequalLabel">
+          <input type="radio" name="shareType" value="unequal" hidden>
+          <span class="toggle-icon">✎</span> Custom
+        </label>
+      </div>
+
+      <!-- Member checkboxes -->
+      <label class="field-label">Members involved</label>
+      <div class="member-checkboxes">
+        <label class="check-chip" id="selectAllChip">
+          <input type="checkbox" id="selectAll"> All
+        </label>
+        {% for member in members %}
+        <label class="check-chip">
+          <input type="checkbox" name="members" value="{{ member }}">
+          <span class="chip-avatar">{{ member[0] | upper }}</span>
+          {{ member }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="side-modal-footer">
+      <button id="cancelExpenseBtn2" class="btn-ghost">Cancel</button>
+      <button id="saveExpenseBtn" class="btn-primary">Save Expense</button>
+    </div>
+  </div>
+
+  <!-- ── UNEQUAL SHARE MODAL ── -->
+  <div id="unequalShare" class="side-modal hidden">
+    <div class="side-modal-header">
+      <h2 class="side-modal-title">Custom Splits</h2>
+    </div>
+    <div class="side-modal-body">
+      <p class="modal-hint" id="unequalHint">Enter each member's share. Must add up to the total.</p>
+      <form id="shareForm" class="share-form"></form>
+    </div>
+    <div class="side-modal-footer">
+      <button id="prevshareBtn" class="btn-ghost" type="button">← Back</button>
+      <button id="saveshareBtn" class="btn-primary" type="button">Confirm Splits</button>
+    </div>
+  </div>
+
+  <!-- ── WALLET SYNOPSIS MODAL ── -->
+  <div id="synopsisContainer" class="center-modal hidden">
+    <div class="center-modal-inner">
+      <div class="center-modal-header">
+        <h2 class="center-modal-title">Spending So Far</h2>
+        <button id="closeSynopsis" class="close-btn" aria-label="Close">✕</button>
+      </div>
+      <div id="synopsisContent" class="synopsis-list"></div>
+    </div>
+  </div>
+  <div class="modal-backdrop synopsis-backdrop hidden" id="synopsisBackdrop"></div>
+
+  <!-- ── EXPENSE FEED ── -->
+  <main class="feed-area">
+    <div class="feed-empty" id="feedEmpty">
+      <div class="empty-icon">🧾</div>
+      <p class="empty-text">No expenses yet.<br>Hit <strong>+ Add Expense</strong> to get started.</p>
+    </div>
+    <div class="expense-grid" id="expenseContainer"></div>
+  </main>
+
+  <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+
+  <!-- Toggle style active state for split type -->
+  <script>
+    document.querySelectorAll('input[name="shareType"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.querySelectorAll('.toggle-opt').forEach(l => l.classList.remove('active'));
+        radio.closest('.toggle-opt').classList.add('active');
+      });
+    });
+
+    // Wire second cancel button
+    document.getElementById('cancelExpenseBtn2').addEventListener('click', () => {
+      document.getElementById('cancelExpenseBtn').click();
+    });
+
+    // Backdrop closes expense form
+    document.getElementById('expenseBackdrop').addEventListener('click', () => {
+      document.getElementById('cancelExpenseBtn').click();
+    });
+    document.getElementById('synopsisBackdrop').addEventListener('click', () => {
+      document.getElementById('closeSynopsis').click();
+    });
+
+    // Show/hide feed empty state
+    const feedEmpty = document.getElementById('feedEmpty');
+    const expenseContainer = document.getElementById('expenseContainer');
+    const observer = new MutationObserver(() => {
+      feedEmpty.style.display = expenseContainer.children.length > 0 ? 'none' : 'flex';
+    });
+    observer.observe(expenseContainer, { childList: true });
+  </script>
+</body>
+</html>
