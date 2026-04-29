@@ -1,13 +1,10 @@
 /* ============================================================
    dashboard.js — ALL original logic preserved.
-   Only changes:
-     1. expenseContainer is now inside .expense-grid (new ID same)
-     2. cancelExpenseBtn now also hides backdrop
-     3. synopsisContainer shows/hides backdrop
-     4. billBtn shows center-modal + synopsis-backdrop
-     5. adjustAllCardHeights removed (grid layout handles sizing)
-     6. expense card HTML updated for dark theme styling
+   Wrapped in DOMContentLoaded to guarantee DOM is ready before
+   any getElementById / addEventListener calls run.
    ============================================================ */
+
+document.addEventListener("DOMContentLoaded", () => {
 
 const addExpenseBtn    = document.getElementById("addExpenseBtn");
 const finishBtn        = document.getElementById("FinishBtn");
@@ -247,3 +244,35 @@ document.addEventListener("keydown", (e) => {
     closeExpenseForm();
   }
 });
+
+// ── Toggle split type active styling ─────────────────────────────────────
+document.querySelectorAll('input[name="shareType"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.toggle-opt').forEach(l => l.classList.remove('active'));
+    radio.closest('.toggle-opt').classList.add('active');
+  });
+});
+
+// ── Second cancel button wiring ───────────────────────────────────────────
+const cancelBtn2 = document.getElementById('cancelExpenseBtn2');
+if (cancelBtn2) {
+  cancelBtn2.addEventListener('click', closeExpenseForm);
+}
+
+// ── Backdrop clicks close modals ──────────────────────────────────────────
+expenseBackdrop.addEventListener('click', closeExpenseForm);
+synopsisBackdrop.addEventListener('click', () => {
+  synopsisContainer.classList.add("hidden");
+  synopsisBackdrop.classList.add("hidden");
+});
+
+// ── Show/hide empty feed state ────────────────────────────────────────────
+const feedEmpty = document.getElementById('feedEmpty');
+if (feedEmpty && expenseContainer) {
+  const observer = new MutationObserver(() => {
+    feedEmpty.style.display = expenseContainer.children.length > 0 ? 'none' : 'flex';
+  });
+  observer.observe(expenseContainer, { childList: true });
+}
+
+}); // end DOMContentLoaded

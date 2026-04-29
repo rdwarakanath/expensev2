@@ -137,36 +137,5 @@
   </main>
 
   <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-
-  <!-- Toggle style active state for split type -->
-  <script>
-    document.querySelectorAll('input[name="shareType"]').forEach(radio => {
-      radio.addEventListener('change', () => {
-        document.querySelectorAll('.toggle-opt').forEach(l => l.classList.remove('active'));
-        radio.closest('.toggle-opt').classList.add('active');
-      });
-    });
-
-    // Wire second cancel button
-    document.getElementById('cancelExpenseBtn2').addEventListener('click', () => {
-      document.getElementById('cancelExpenseBtn').click();
-    });
-
-    // Backdrop closes expense form
-    document.getElementById('expenseBackdrop').addEventListener('click', () => {
-      document.getElementById('cancelExpenseBtn').click();
-    });
-    document.getElementById('synopsisBackdrop').addEventListener('click', () => {
-      document.getElementById('closeSynopsis').click();
-    });
-
-    // Show/hide feed empty state
-    const feedEmpty = document.getElementById('feedEmpty');
-    const expenseContainer = document.getElementById('expenseContainer');
-    const observer = new MutationObserver(() => {
-      feedEmpty.style.display = expenseContainer.children.length > 0 ? 'none' : 'flex';
-    });
-    observer.observe(expenseContainer, { childList: true });
-  </script>
 </body>
 </html>
