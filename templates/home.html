@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SplitWise — New Trip</title>
+  <title>SplitWise — Home</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
@@ -12,67 +12,109 @@
 </head>
 <body>
 
-  <!-- Animated mesh background -->
   <div class="bg-mesh">
     <div class="mesh-orb orb-1"></div>
     <div class="mesh-orb orb-2"></div>
     <div class="mesh-orb orb-3"></div>
   </div>
-
-  <!-- Noise grain overlay -->
   <div class="grain"></div>
 
-  <!-- Main stage -->
-  <div class="stage">
+  <!-- Top bar -->
+  <nav class="topbar">
+    <span class="topbar-title">SPLITWISE</span>
+    <div class="topbar-right">
+      <span class="topbar-user">👤 {{ username }}</span>
+      <a href="/logout" class="btn-ghost topbar-logout">Logout</a>
+    </div>
+  </nav>
 
-    <!-- Hero text -->
-    <div class="hero" id="heroText">
-      <p class="hero-label">TRIP EXPENSE TRACKER</p>
-      <h1 class="hero-title">Split bills,<br><span class="hero-accent">not friendships.</span></h1>
-      <p class="hero-sub">Track shared expenses effortlessly across any group trip.</p>
+  <!-- Main content -->
+  <div class="home-wrap">
+
+    <!-- Header row -->
+    <div class="home-header">
+      <div>
+        <p class="hero-label">YOUR TRIPS</p>
+        <h1 class="home-title">Hey, <span class="hero-accent">{{ username }}</span> 👋</h1>
+      </div>
       <button id="newTripBtn" class="cta-btn">
-        <span class="cta-icon">+</span>
-        New Trip
+        <span class="cta-icon">+</span> New Trip
       </button>
     </div>
 
-    <!-- ── STEP 1: Trip Name ── -->
-    <div id="tripBox" class="modal hidden">
-      <div class="modal-step">STEP 1 OF 3</div>
-      <h2 class="modal-title">Name your trip</h2>
-      <p class="modal-hint">Give it something memorable.</p>
-      <input type="text" id="tripNameInput" class="field" placeholder="e.g. Goa 2025, Euro Trip…" autocomplete="off" />
-      <div class="modal-actions">
-        <button id="cancelBtn" class="btn-ghost">Cancel</button>
-        <button id="saveBtn" class="btn-primary">Continue →</button>
+    <!-- Trip history list -->
+    {% if trips %}
+    <div class="trip-list">
+      {% for trip in trips %}
+      <div class="trip-row">
+        <div class="trip-row-left">
+          <div class="trip-row-avatar">{{ trip.trip_name[0] | upper }}</div>
+          <div class="trip-row-info">
+            <span class="trip-row-name">{{ trip.trip_name }}</span>
+            <span class="trip-row-date">{{ trip.created_at[:10] }}</span>
+          </div>
+        </div>
+        <div class="trip-row-right">
+          {% if trip.is_active %}
+            <span class="trip-badge badge-active">● Active</span>
+            <a href="/dashboard/{{ trip.id }}" class="btn-primary trip-btn">Continue</a>
+          {% else %}
+            <span class="trip-badge badge-done">✓ Done</span>
+            <a href="/results/{{ trip.id }}" class="btn-ghost trip-btn">View Results</a>
+          {% endif %}
+        </div>
       </div>
+      {% endfor %}
     </div>
-
-    <!-- ── STEP 2: Member Count ── -->
-    <div id="memberCountBox" class="modal hidden">
-      <div class="modal-step">STEP 2 OF 3</div>
-      <h2 class="modal-title">How many people?</h2>
-      <p class="modal-hint">Including yourself.</p>
-      <input type="number" id="memberCountInput" class="field" placeholder="e.g. 4" min="1" max="20" />
-      <div class="modal-actions">
-        <button id="backBtn" class="btn-ghost">← Back</button>
-        <button id="nextBtn" class="btn-primary">Continue →</button>
-      </div>
+    {% else %}
+    <div class="home-empty">
+      <div class="empty-icon">🗺</div>
+      <p class="empty-text">No trips yet.<br>Hit <strong>+ New Trip</strong> to get started.</p>
     </div>
+    {% endif %}
 
-    <!-- ── STEP 3: Member Names ── -->
-    <div id="memberNamesBox" class="modal hidden">
-      <div class="modal-step">STEP 3 OF 3</div>
-      <h2 class="modal-title">Enter member names</h2>
-      <p class="modal-hint">One name per person.</p>
-      <form id="memberForm" class="name-form"></form>
-      <div class="modal-actions">
-        <button id="prevBtn" class="btn-ghost">← Back</button>
-        <button id="saveMembersBtn" class="btn-primary">Create Trip ✓</button>
-      </div>
+  </div><!-- /home-wrap -->
+
+  <!-- ── NEW TRIP MODALS (same 3-step flow as before) ── -->
+
+  <!-- Step 1: Trip Name -->
+  <div id="tripBox" class="modal hidden">
+    <div class="modal-step">STEP 1 OF 3</div>
+    <h2 class="modal-title">Name your trip</h2>
+    <p class="modal-hint">Give it something memorable.</p>
+    <input type="text" id="tripNameInput" class="field" placeholder="e.g. Goa 2025, Euro Trip…" autocomplete="off" />
+    <div class="modal-actions">
+      <button id="cancelBtn" class="btn-ghost">Cancel</button>
+      <button id="saveBtn" class="btn-primary">Continue →</button>
     </div>
+  </div>
 
-  </div><!-- /stage -->
+  <!-- Step 2: Member Count -->
+  <div id="memberCountBox" class="modal hidden">
+    <div class="modal-step">STEP 2 OF 3</div>
+    <h2 class="modal-title">How many people?</h2>
+    <p class="modal-hint">Including yourself.</p>
+    <input type="number" id="memberCountInput" class="field" placeholder="e.g. 4" min="1" max="20" />
+    <div class="modal-actions">
+      <button id="backBtn" class="btn-ghost">← Back</button>
+      <button id="nextBtn" class="btn-primary">Continue →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Member Names -->
+  <div id="memberNamesBox" class="modal hidden">
+    <div class="modal-step">STEP 3 OF 3</div>
+    <h2 class="modal-title">Enter member names</h2>
+    <p class="modal-hint">One name per person.</p>
+    <form id="memberForm" class="name-form"></form>
+    <div class="modal-actions">
+      <button id="prevBtn" class="btn-ghost">← Back</button>
+      <button id="saveMembersBtn" class="btn-primary">Create Trip ✓</button>
+    </div>
+  </div>
+
+  <!-- Backdrop for modals -->
+  <div class="modal-backdrop hidden" id="modalBackdrop"></div>
 
   <script>
     const newTripBtn     = document.getElementById("newTripBtn");
@@ -86,40 +128,38 @@
     const prevBtn        = document.getElementById("prevBtn");
     const saveMembersBtn = document.getElementById("saveMembersBtn");
     const memberForm     = document.getElementById("memberForm");
-    const heroText       = document.getElementById("heroText");
+    const backdrop       = document.getElementById("modalBackdrop");
     let count;
 
     function showModal(modal) {
+      backdrop.classList.remove("hidden");
       modal.classList.remove("hidden");
-      modal.classList.add("modal-enter");
     }
     function hideModal(modal) {
       modal.classList.add("hidden");
-      modal.classList.remove("modal-enter");
+    }
+    function hideAll() {
+      [tripBox, memberCountBox, memberNamesBox].forEach(m => m.classList.add("hidden"));
+      backdrop.classList.add("hidden");
     }
 
-    newTripBtn.addEventListener("click", () => {
-      heroText.style.opacity = "0";
-      heroText.style.transform = "translateY(-16px)";
-      setTimeout(() => heroText.style.display = "none", 280);
-      setTimeout(() => showModal(tripBox), 200);
-    });
+    newTripBtn.addEventListener("click", () => showModal(tripBox));
+    backdrop.addEventListener("click", hideAll);
 
-    cancelBtn.addEventListener("click", () => {
-      hideModal(tripBox);
-      heroText.style.display = "";
-      setTimeout(() => { heroText.style.opacity = "1"; heroText.style.transform = ""; }, 20);
-    });
+    cancelBtn.addEventListener("click", hideAll);
 
     saveBtn.addEventListener("click", async () => {
       const tripName = document.getElementById("tripNameInput").value.trim();
       if (!tripName) { shakeField("tripNameInput"); return; }
 
-      await fetch("/save_trip", {
+      const res  = await fetch("/save_trip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tripName })
       });
+      const data = await res.json();
+      // Store trip_id returned by server for the member step
+      window._pendingTripId = data.trip_id;
 
       hideModal(tripBox);
       setTimeout(() => showModal(memberCountBox), 120);
@@ -165,8 +205,8 @@
       const lower = members.map(n => n.toLowerCase());
       if (new Set(lower).size !== lower.length) { alert("Names must be unique."); return; }
 
-      saveMembersBtn.textContent = "Saving…";
-      saveMembersBtn.disabled = true;
+      saveMembersBtn.textContent = "Creating…";
+      saveMembersBtn.disabled    = true;
 
       const res  = await fetch("/save_members", {
         method: "POST",
@@ -175,6 +215,7 @@
       });
       const data = await res.json();
 
+      // Redirect to URL-based dashboard with trip_id
       window.location.href = `/dashboard/${data.trip_id}`;
     });
 
@@ -182,7 +223,7 @@
     document.addEventListener("keydown", e => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      if (!tripBox.classList.contains("hidden"))        saveBtn.click();
+      if (!tripBox.classList.contains("hidden"))             saveBtn.click();
       else if (!memberCountBox.classList.contains("hidden")) nextBtn.click();
       else if (!memberNamesBox.classList.contains("hidden")) saveMembersBtn.click();
     });

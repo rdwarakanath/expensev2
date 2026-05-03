@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SplitWise — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"></noscript>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <div class="bg-mesh">
+    <div class="mesh-orb orb-1"></div>
+    <div class="mesh-orb orb-2"></div>
+    <div class="mesh-orb orb-3"></div>
+  </div>
+  <div class="grain"></div>
+
+  <div class="stage">
+    <div class="auth-card">
+
+      <div class="auth-brand">
+        <p class="hero-label">SPLITWISE</p>
+        <h1 class="auth-title">Welcome back</h1>
+        <p class="modal-hint">Sign in to your account.</p>
+      </div>
+
+      {% if error %}
+      <div class="auth-error">⚠ {{ error }}</div>
+      {% endif %}
+
+      <form method="POST" action="/login" class="auth-form">
+        <label class="field-label">Username</label>
+        <input type="text" name="username" class="field" placeholder="your username" autocomplete="username" required />
+
+        <label class="field-label">Password</label>
+        <input type="password" name="password" class="field" placeholder="••••••••" autocomplete="current-password" required />
+
+        <button type="submit" class="btn-primary auth-submit">Sign In →</button>
+      </form>
+
+      <p class="auth-switch">
+        Don't have an account?
+        <a href="/signup" class="auth-link">Sign up</a>
+      </p>
+
+    </div>
+  </div>
+
+</body>
+</html>

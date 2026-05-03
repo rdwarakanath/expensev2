@@ -1,21 +1,48 @@
 import sqlite3
 
 conn = sqlite3.connect("expense.db")
-cur = conn.cursor()
+cur  = conn.cursor()
 
-# Enable foreign key enforcement
 cur.execute("PRAGMA foreign_keys = ON")
 
-# ── Table 1: trips ──────────────────────────────────────────────────────────
+# ── Table 1: users (NEW) ─────────────────────────────────────────────────────
 cur.execute("""
-CREATE TABLE IF NOT EXISTS trips (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    trip_name   TEXT NOT NULL,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT NOT NULL UNIQUE,
+    email         TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """)
 
-# ── Table 2: members ────────────────────────────────────────────────────────
+# ── Table 2: trips ───────────────────────────────────────────────────────────
+# Created with full structure. If table already exists, we patch it below.
+cur.execute("""
+CREATE TABLE IF NOT EXISTS trips (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER,
+    trip_name   TEXT NOT NULL,
+    is_active   INTEGER NOT NULL DEFAULT 1,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+)
+""")
+
+# ── Patch existing trips table if columns are missing ────────────────────────
+# This runs safely even if DB was created before — ALTER TABLE is ignored
+# if columns already exist (handled via try/except).
+existing_cols = [row[1] for row in cur.execute("PRAGMA table_info(trips)").fetchall()]
+
+if "user_id" not in existing_cols:
+    cur.execute("ALTER TABLE trips ADD COLUMN user_id INTEGER REFERENCES users(id)")
+    print("Patched trips: added user_id")
+
+if "is_active" not in existing_cols:
+    cur.execute("ALTER TABLE trips ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+    print("Patched trips: added is_active")
+
+# ── Table 3: members (unchanged) ─────────────────────────────────────────────
 cur.execute("""
 CREATE TABLE IF NOT EXISTS members (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,8 +52,7 @@ CREATE TABLE IF NOT EXISTS members (
 )
 """)
 
-# ── Table 3: expenses ───────────────────────────────────────────────────────
-# payer_id references members.id so we can JOIN back to get the payer's name
+# ── Table 4: expenses (unchanged) ────────────────────────────────────────────
 cur.execute("""
 CREATE TABLE IF NOT EXISTS expenses (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,8 +66,7 @@ CREATE TABLE IF NOT EXISTS expenses (
 )
 """)
 
-# ── Table 4: expense_splits ─────────────────────────────────────────────────
-# One row per (expense, member) – stores how much that member owes for that expense
+# ── Table 5: expense_splits (unchanged) ──────────────────────────────────────
 cur.execute("""
 CREATE TABLE IF NOT EXISTS expense_splits (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,4 +82,4 @@ conn.commit()
 conn.close()
 
 print("Database initialised successfully.")
-print("Tables created: trips, members, expenses, expense_splits")
+print("Tables: users, trips, members, expenses, expense_splits")

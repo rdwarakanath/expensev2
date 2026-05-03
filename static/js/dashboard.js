@@ -213,7 +213,7 @@ document.addEventListener("keydown", function(event) {
 // ── Add expense card + POST to backend (ORIGINAL — unchanged) ─────────────
 async function addExpenseCard(reason, amount, members, shares, whopaid) {
   try {
-    const response = await fetch("/add_expense", {
+    const response = await fetch(`/add_expense/${tripId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason, amount, members, shares, whopaid })
@@ -267,16 +267,17 @@ function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1).toLowerCa
 function roundTo(num, decimals) { return Math.round(num * 10 ** decimals) / 10 ** decimals; }
 
 // ── Finish button (ORIGINAL — unchanged) ─────────────────────────────────
-finishBtn.addEventListener("click", () => {
+finishBtn.addEventListener("click", async () => {
   if (confirm("Are you sure you want to finish the trip?")) {
-    window.location.href = "/results";
+    await fetch(`/finish_trip/${tripId}`, { method: "POST" });
+    window.location.href = `/results/${tripId}`;
   }
 });
 
 // ── Bill synopsis (ORIGINAL — unchanged) ─────────────────────────────────
 billBtn.addEventListener("click", async () => {
   try {
-    const response = await fetch("/get_data");
+    const response = await fetch(`/get_data/${tripId}`);
     if (!response.ok) throw new Error("Network error");
     const data = await response.json();
     const listItems = data.map(item => `<li>${item}</li>`).join("");

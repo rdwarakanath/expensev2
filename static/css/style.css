@@ -6,6 +6,7 @@
 /* ── Variables ── */
 :root {
   --bg-base:        #0d0f14;
+  /* Font variables with system fallbacks in case Google Fonts is blocked */
   --bg-panel:       rgba(255,255,255,0.05);
   --bg-panel-hover: rgba(255,255,255,0.08);
   --border:         rgba(255,255,255,0.10);
@@ -27,8 +28,8 @@
   --radius-md:  14px;
   --radius-lg:  20px;
 
-  --font-display: 'Syne', sans-serif;
-  --font-body:    'DM Sans', sans-serif;
+  --font-display: 'Syne', 'Segoe UI', Arial, sans-serif;
+  --font-body:    'DM Sans', 'Segoe UI', Arial, sans-serif;
 
   --shadow-glow:  0 0 40px rgba(251,191,36,0.12);
   --shadow-card:  0 4px 24px rgba(0,0,0,0.4);
@@ -855,3 +856,217 @@ body {
 }
 .splits-total-value.remaining-ok   { color: var(--green); }
 .splits-total-value.remaining-over { color: var(--red); }
+
+/* ============================================================
+   AUTH PAGES (login / signup)
+   ============================================================ */
+.auth-card {
+  background: rgba(17,20,30,0.92);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 4px 40px rgba(0,0,0,0.5), var(--shadow-glow);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: modalIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.auth-brand { margin-bottom: 28px; }
+.auth-title {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 6px 0 4px;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+.auth-form .field { margin-bottom: 10px; }
+.auth-submit {
+  width: 100%;
+  padding: 13px;
+  font-size: 1rem;
+  margin-top: 6px;
+}
+.auth-error {
+  background: var(--red-dim);
+  border: 1px solid rgba(248,113,113,0.3);
+  color: var(--red);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  margin-bottom: 16px;
+}
+.auth-switch {
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+.auth-link {
+  color: var(--amber);
+  text-decoration: none;
+  font-weight: 600;
+}
+.auth-link:hover { text-decoration: underline; }
+
+/* ============================================================
+   HOME PAGE
+   ============================================================ */
+.topbar-user {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.topbar-logout {
+  font-size: 0.82rem;
+  padding: 7px 14px;
+  text-decoration: none;
+}
+
+.home-wrap {
+  position: relative;
+  z-index: 2;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 100px 24px 60px; /* top padding clears the fixed topbar */
+}
+.home-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 36px;
+  flex-wrap: wrap;
+}
+.home-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 6px 0 0;
+}
+
+/* Trip list */
+.trip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.trip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  transition: border-color 0.2s, background 0.2s;
+  animation: fadeUp 0.4s ease both;
+}
+.trip-row:hover {
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.07);
+}
+.trip-row-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.trip-row-avatar {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #000;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.trip-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.trip-row-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trip-row-date {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.trip-row-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.trip-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 100px;
+  letter-spacing: 0.04em;
+}
+.badge-active {
+  background: rgba(52,211,153,0.12);
+  border: 1px solid rgba(52,211,153,0.3);
+  color: var(--green);
+}
+.badge-done {
+  background: rgba(148,163,184,0.1);
+  border: 1px solid rgba(148,163,184,0.2);
+  color: var(--text-muted);
+}
+.trip-btn {
+  font-size: 0.82rem;
+  padding: 8px 16px;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Home empty state */
+.home-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 60px 0;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Modal backdrop for home page modals */
+#modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 90;
+  backdrop-filter: blur(4px);
+}
+/* Home page modals sit above backdrop */
+#tripBox, #memberCountBox, #memberNamesBox {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  width: 100%;
+  max-width: 420px;
+}

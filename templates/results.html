@@ -6,7 +6,8 @@
   <title>Trip Summary</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/results.css') }}" />
 </head>
 <body>
@@ -24,6 +25,7 @@
     <header class="results-header">
       <p class="results-label">TRIP SUMMARY</p>
       <h1 class="results-title">Here's how<br><span class="results-accent">the money moved.</span></h1>
+      <p class="results-trip-name">{{ trip_name }}</p>
 
       <!-- Status pill -->
       <div class="status-pill {% if 'no data' in message|lower %}pill-error{% else %}pill-ok{% endif %}">
@@ -144,7 +146,7 @@
     {% endif %}
 
     <div class="results-footer">
-      <a href="/" class="home-btn">← New Trip</a>
+      <a href="/home" class="home-btn">← Back to Home</a>
     </div>
 
   </div><!-- /results-wrap -->

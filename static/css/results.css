@@ -324,3 +324,14 @@ body {
   .settle-arrow { width: 100%; flex-direction: row; justify-content: center; }
   .recip-side   { justify-content: flex-start; flex-direction: row; text-align: left; }
 }
+
+/* Trip name shown under results title */
+.results-trip-name {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-top: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
