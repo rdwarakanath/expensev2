@@ -379,7 +379,7 @@ body {
 .side-modal {
   position: fixed;
   top: 64px; right: 0; bottom: 0;
-  width: 380px;
+  width: 420px;
   max-width: 100vw;
   background: rgba(14,17,26,0.97);
   border-left: 1px solid var(--border);
@@ -387,7 +387,7 @@ body {
   display: flex;
   flex-direction: column;
   animation: slideIn 0.28s cubic-bezier(0.34,1.2,0.64,1);
-  overflow: hidden;
+  overflow: hidden; /* clips children */
 }
 @keyframes slideIn {
   from { transform: translateX(100%); opacity: 0; }
@@ -422,7 +422,9 @@ body {
 
 .side-modal-body {
   flex: 1;
+  min-height: 0;        /* critical: allows flex child to shrink below content size */
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
@@ -699,3 +701,157 @@ body {
   color: var(--text-primary);
   text-align: left;
 }
+
+/* ── Inline custom splits section ────────────────────────────────────────── */
+/*
+   CSS grid-template-rows trick: animates open/close without overflow:hidden
+   on the outer element, so the parent side-modal-body can scroll freely.
+   Only the inner .splits-inner wrapper clips during the animation.
+*/
+.custom-splits-section {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s cubic-bezier(0.4,0,0.2,1),
+              opacity 0.3s ease,
+              margin  0.3s ease;
+  opacity: 0;
+  margin-top: 0;
+}
+.custom-splits-section > .splits-inner {
+  overflow: hidden; /* clips only during animation */
+  min-height: 0;
+}
+.custom-splits-section.collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  margin-top: 0;
+  pointer-events: none;
+}
+.custom-splits-section.expanded {
+  grid-template-rows: 1fr; /* grows to natural height — no max-height cap */
+  opacity: 1;
+  margin-top: 12px;
+  pointer-events: all;
+}
+
+.splits-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.splits-divider::before,
+.splits-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.splits-divider-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.splits-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+/* Inline share form rows */
+.inline-share-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.inline-share-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  transition: border-color 0.2s;
+}
+.inline-share-row:focus-within {
+  border-color: var(--amber);
+  background: rgba(251,191,36,0.05);
+}
+.inline-share-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #000;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.75rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.inline-share-name {
+  flex: 1;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inline-share-input {
+  width: 90px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  outline: none;
+  text-align: right;
+  transition: border-color 0.2s, background 0.2s;
+  /* Remove spinner arrows */
+  -moz-appearance: textfield;
+}
+.inline-share-input::-webkit-outer-spin-button,
+.inline-share-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.inline-share-input:focus {
+  border-color: var(--amber);
+  background: rgba(251,191,36,0.08);
+}
+.inline-share-input::placeholder { color: var(--text-muted); font-weight: 400; }
+
+/* Remaining row */
+.splits-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+}
+.splits-total-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.splits-total-value {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  transition: color 0.2s;
+}
+.splits-total-value.remaining-ok   { color: var(--green); }
+.splits-total-value.remaining-over { color: var(--red); }

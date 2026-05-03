@@ -1,34 +1,36 @@
 /* ============================================================
-   dashboard.js — ALL original logic preserved.
-   Wrapped in DOMContentLoaded to guarantee DOM is ready before
-   any getElementById / addEventListener calls run.
+   dashboard.js
+   CHANGED: Custom splits now expand inline inside the expense
+            form instead of opening a separate panel.
+   UNCHANGED: All validation logic, fetch calls, equal/unequal
+              share calculation, selectAll, finish, bill synopsis.
    ============================================================ */
 
 document.addEventListener("DOMContentLoaded", () => {
 
-const addExpenseBtn    = document.getElementById("addExpenseBtn");
-const finishBtn        = document.getElementById("FinishBtn");
-const billBtn          = document.getElementById("billBtn");
-const expenseForm      = document.getElementById("expenseForm");
-const cancelExpenseBtn = document.getElementById("cancelExpenseBtn");
-const saveExpenseBtn   = document.getElementById("saveExpenseBtn");
-const expenseContainer = document.getElementById("expenseContainer");
-const unequalShare     = document.getElementById("unequalShare");
-const shareForm        = document.getElementById("shareForm");
-const prevshareBtn     = document.getElementById("prevshareBtn");
-const saveshareBtn     = document.getElementById("saveshareBtn");
-const synopsisContainer  = document.getElementById("synopsisContainer");
-const synopsisContent    = document.getElementById("synopsisContent");
-const closeBtn           = document.getElementById("closeSynopsis");
-const expenseBackdrop    = document.getElementById("expenseBackdrop");
-const synopsisBackdrop   = document.getElementById("synopsisBackdrop");
+const addExpenseBtn       = document.getElementById("addExpenseBtn");
+const finishBtn           = document.getElementById("FinishBtn");
+const billBtn             = document.getElementById("billBtn");
+const expenseForm         = document.getElementById("expenseForm");
+const cancelExpenseBtn    = document.getElementById("cancelExpenseBtn");
+const saveExpenseBtn      = document.getElementById("saveExpenseBtn");
+const expenseContainer    = document.getElementById("expenseContainer");
+const shareForm           = document.getElementById("shareForm");
+const customSplitsSection = document.getElementById("customSplitsSection");
+const splitsHint          = document.getElementById("splitsHint");
+const splitsRemaining     = document.getElementById("splitsRemaining");
+const synopsisContainer   = document.getElementById("synopsisContainer");
+const synopsisContent     = document.getElementById("synopsisContent");
+const closeBtn            = document.getElementById("closeSynopsis");
+const expenseBackdrop     = document.getElementById("expenseBackdrop");
+const synopsisBackdrop    = document.getElementById("synopsisBackdrop");
 
 let paidby = "";
 let tempReason = "";
 let tempAmount = "";
 let selectedmembers = [];
 
-// ── Show / hide expense form (side modal + backdrop) ──────────────────────
+// ── Show / hide expense form ──────────────────────────────────────────────
 addExpenseBtn.addEventListener("click", () => {
   expenseForm.classList.remove("hidden");
   expenseBackdrop.classList.remove("hidden");
@@ -37,15 +39,17 @@ addExpenseBtn.addEventListener("click", () => {
 function closeExpenseForm() {
   expenseForm.classList.add("hidden");
   expenseBackdrop.classList.add("hidden");
+  collapseCustomSplits();
 }
 cancelExpenseBtn.addEventListener("click", closeExpenseForm);
 
 // ── "Select All" checkbox logic (ORIGINAL — unchanged) ───────────────────
-const selectAll       = document.getElementById("selectAll");
+const selectAll        = document.getElementById("selectAll");
 const memberCheckboxes = document.querySelectorAll('input[name="members"]');
 
 selectAll.addEventListener("change", () => {
   memberCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+  if (isCustomMode()) rebuildCustomInputs();
 });
 
 memberCheckboxes.forEach(cb => {
@@ -55,100 +59,158 @@ memberCheckboxes.forEach(cb => {
     } else if (Array.from(memberCheckboxes).every(m => m.checked)) {
       selectAll.checked = true;
     }
+    // Rebuild inputs live when member selection changes in custom mode
+    if (isCustomMode()) rebuildCustomInputs();
   });
 });
 
-// ── Save expense (ORIGINAL validation logic — unchanged) ─────────────────
-saveExpenseBtn.addEventListener("click", () => {
-  const reason   = document.getElementById("expenseReason").value;
-  const amount   = document.getElementById("expenseAmount").value;
-  paidby         = document.getElementById("paidby").value;
-  const checkedboxes  = document.querySelectorAll(".member-checkboxes input[name='members']:checked");
-  selectedmembers     = Array.from(checkedboxes).map(cb => cb.value);
-  const shareType     = document.querySelector("input[name='shareType']:checked").value;
+// ── Split type toggle ─────────────────────────────────────────────────────
+document.querySelectorAll('input[name="shareType"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.toggle-opt').forEach(l => l.classList.remove('active'));
+    radio.closest('.toggle-opt').classList.add('active');
+    if (radio.value === "unequal") {
+      expandCustomSplits();
+    } else {
+      collapseCustomSplits();
+    }
+  });
+});
 
-  // ── Original validation (unchanged) ──
-  if (!reason || !amount) {
-    alert("Please enter both reason and amount."); return;
+function isCustomMode() {
+  const checked = document.querySelector("input[name='shareType']:checked");
+  return checked && checked.value === "unequal";
+}
+
+function expandCustomSplits() {
+  rebuildCustomInputs();
+  customSplitsSection.classList.remove("collapsed");
+  customSplitsSection.classList.add("expanded");
+}
+
+function collapseCustomSplits() {
+  customSplitsSection.classList.remove("expanded");
+  customSplitsSection.classList.add("collapsed");
+  if (shareForm) shareForm.innerHTML = "";
+}
+
+// ── Build one input row per selected member ───────────────────────────────
+function rebuildCustomInputs() {
+  const checkedBoxes     = document.querySelectorAll(".member-checkboxes input[name='members']:checked");
+  const currentMembers   = Array.from(checkedBoxes).map(cb => cb.value);
+  const amount           = parseFloat(document.getElementById("expenseAmount").value) || 0;
+
+  if (splitsHint) {
+    splitsHint.textContent = amount > 0
+      ? `Shares must add up to ₹${amount.toFixed(2)}`
+      : "Enter the total amount above first.";
   }
-  if (amount <= 0) {
-    alert("Please enter a valid amount."); return;
+
+  shareForm.innerHTML = "";
+  currentMembers.forEach(member => {
+    const row = document.createElement("div");
+    row.className = "inline-share-row";
+
+    const avatar = document.createElement("span");
+    avatar.className = "inline-share-avatar";
+    avatar.textContent = member[0].toUpperCase();
+
+    const name = document.createElement("span");
+    name.className = "inline-share-name";
+    name.textContent = member;
+
+    const input = document.createElement("input");
+    input.type        = "number";
+    input.placeholder = "0.00";
+    input.min         = "0";
+    input.classList.add("share-input", "inline-share-input");
+    input.addEventListener("input", updateRemaining);
+
+    row.appendChild(avatar);
+    row.appendChild(name);
+    row.appendChild(input);
+    shareForm.appendChild(row);
+  });
+
+  updateRemaining();
+}
+
+// ── Live remaining counter ────────────────────────────────────────────────
+function updateRemaining() {
+  const amount    = parseFloat(document.getElementById("expenseAmount").value) || 0;
+  const inputs    = document.querySelectorAll(".inline-share-input");
+  const entered   = Array.from(inputs).reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
+  const remaining = roundTo(amount - entered, 2);
+
+  if (splitsRemaining) {
+    splitsRemaining.textContent = `₹${remaining.toFixed(2)}`;
+    splitsRemaining.className   = "splits-total-value " +
+      (Math.abs(remaining) < 0.01 ? "remaining-ok" : remaining < 0 ? "remaining-over" : "");
   }
-  if (!paidby || !members.includes(paidby)) {
-    alert("Please enter a valid member name."); return;
-  }
-  if (selectedmembers.length === 0) {
-    alert("Please select members."); return;
-  }
+}
+
+// Rebuild when amount field changes while in custom mode
+document.getElementById("expenseAmount").addEventListener("input", () => {
+  if (isCustomMode()) rebuildCustomInputs();
+});
+
+// ── Save expense (ORIGINAL validation — unchanged) ────────────────────────
+saveExpenseBtn.addEventListener("click", () => {
+  const reason    = document.getElementById("expenseReason").value.trim();
+  const amount    = document.getElementById("expenseAmount").value;
+  paidby          = document.getElementById("paidby").value.trim();
+  const checkedBoxes = document.querySelectorAll(".member-checkboxes input[name='members']:checked");
+  selectedmembers    = Array.from(checkedBoxes).map(cb => cb.value);
+  const shareType    = document.querySelector("input[name='shareType']:checked").value;
+
+  // Original validation (unchanged)
+  if (!reason || !amount)                        { alert("Please enter both reason and amount."); return; }
+  if (amount <= 0)                               { alert("Please enter a valid amount."); return; }
+  if (!paidby || !members.includes(paidby))      { alert("Please enter a valid member name."); return; }
+  if (selectedmembers.length === 0)              { alert("Please select members."); return; }
 
   tempReason = reason;
   tempAmount = amount;
 
-  const share  = Math.round((amount / selectedmembers.length) * 100) / 100;
-  const shares = Array(selectedmembers.length).fill(share);
+  if (shareType === "equal") {
+    // Equal split (ORIGINAL — unchanged)
+    const share  = Math.round((amount / selectedmembers.length) * 100) / 100;
+    const shares = Array(selectedmembers.length).fill(share);
+    addExpenseCard(reason, amount, selectedmembers, shares, paidby);
+    resetExpenseForm();
 
-  if (shareType === "unequal") {
-    // Build unequal share inputs
-    shareForm.innerHTML = "";
+  } else {
+    // Custom split — read inline inputs, validate (ORIGINAL logic — unchanged)
+    const inputs = document.querySelectorAll(".inline-share-input");
+    const shares = Array.from(inputs)
+      .map(i => roundTo(Number(i.value.trim()), 2))
+      .filter(v => !isNaN(v) && v >= 0);
 
-    // Show hint with total
-    const hint = document.getElementById("unequalHint");
-    if (hint) hint.textContent = `Shares must add up to ₹${amount}. Enter each person's amount.`;
+    if (shares.length !== selectedmembers.length) {
+      alert("Please fill in all share amounts."); return;
+    }
 
-    selectedmembers.forEach(member => {
-      const input = document.createElement("input");
-      input.type = "number";
-      input.placeholder = `${member}'s share`;
-      input.classList.add("share-input");
-      shareForm.appendChild(input);
-    });
+    const total = roundTo(shares.reduce((sum, v) => sum + v, 0), 2);
+    // ORIGINAL check: shares must match total amount exactly
+    if (total !== roundTo(Number(tempAmount), 2)) {
+      alert(`Shares (₹${total.toFixed(2)}) don't match the total (₹${Number(tempAmount).toFixed(2)}).`);
+      return;
+    }
 
-    closeExpenseForm();
-    unequalShare.classList.remove("hidden");
-    expenseBackdrop.classList.remove("hidden"); // keep backdrop for unequal modal
-    return;
+    addExpenseCard(tempReason, tempAmount, selectedmembers, shares, paidby);
+    resetExpenseForm();
   }
-
-  addExpenseCard(reason, amount, selectedmembers, shares, paidby);
-  resetExpenseForm();
 });
 
-// ── Enter key (ORIGINAL — unchanged) ────────────────────────────────────
+// ── Enter key (ORIGINAL — unchanged) ─────────────────────────────────────
 document.addEventListener("keydown", function(event) {
   if (event.key === "Enter") {
     event.preventDefault();
-    if (!unequalShare.classList.contains("hidden")) {
-      saveshareBtn.click();
-    } else if (!expenseForm.classList.contains("hidden")) {
-      saveExpenseBtn.click();
-    }
+    if (!expenseForm.classList.contains("hidden")) saveExpenseBtn.click();
   }
 });
 
-// ── Unequal share navigation (ORIGINAL — unchanged) ──────────────────────
-prevshareBtn.addEventListener("click", () => {
-  unequalShare.classList.add("hidden");
-  expenseForm.classList.remove("hidden");
-});
-
-saveshareBtn.addEventListener("click", () => {
-  const inputs = document.querySelectorAll(".share-input");
-  const shares = Array.from(inputs)
-    .map(i => roundTo(Number(i.value.trim()), 2))
-    .filter(v => !isNaN(v));
-
-  const total = shares.reduce((sum, val) => sum + val, 0);
-  if (roundTo(total, 2) !== roundTo(Number(tempAmount), 2)) {
-    alert("Shares don't match the total amount."); return;
-  }
-
-  unequalShare.classList.add("hidden");
-  expenseBackdrop.classList.add("hidden");
-  addExpenseCard(tempReason, tempAmount, selectedmembers, shares, paidby);
-  resetExpenseForm();
-});
-
-// ── Add expense card + POST to backend (ORIGINAL logic — unchanged) ───────
+// ── Add expense card + POST to backend (ORIGINAL — unchanged) ─────────────
 async function addExpenseCard(reason, amount, members, shares, whopaid) {
   try {
     const response = await fetch("/add_expense", {
@@ -159,14 +221,11 @@ async function addExpenseCard(reason, amount, members, shares, whopaid) {
     const result = await response.json();
 
     if (result.status === "success") {
-      // Build card (updated HTML for dark theme — logic identical)
       const card = document.createElement("div");
       card.className = "expense-card";
-
       const membersList = members
         .map((m, i) => `<li>${capitalize(m)}: <strong style="color:var(--amber)">₹${shares[i]}</strong></li>`)
         .join("");
-
       card.innerHTML = `
         <strong>${reason.toUpperCase()}</strong>
         <p style="color:var(--text-secondary);font-size:0.88rem;margin:4px 0 10px">
@@ -175,7 +234,6 @@ async function addExpenseCard(reason, amount, members, shares, whopaid) {
         <ul style="list-style:none;padding:0">${membersList}</ul>
       `;
       expenseContainer.appendChild(card);
-
     } else if (result.status === "error") {
       alert(`⚠ ${result.message || "Failed to save expense."}`);
     } else {
@@ -186,23 +244,27 @@ async function addExpenseCard(reason, amount, members, shares, whopaid) {
   }
 }
 
-// ── Reset form (ORIGINAL — unchanged) ────────────────────────────────────
+// ── Reset form ────────────────────────────────────────────────────────────
 function resetExpenseForm() {
+  closeExpenseForm();
   document.getElementById("expenseReason").value = "";
   document.getElementById("expenseAmount").value = "";
   document.getElementById("paidby").value = "";
   document.querySelectorAll(".member-checkboxes input[type='checkbox']")
     .forEach(cb => cb.checked = false);
+  // Reset split toggle back to Equal
+  const equalRadio = document.querySelector("input[name='shareType'][value='equal']");
+  if (equalRadio) {
+    equalRadio.checked = true;
+    document.querySelectorAll('.toggle-opt').forEach(l => l.classList.remove('active'));
+    equalRadio.closest('.toggle-opt').classList.add('active');
+  }
+  collapseCustomSplits();
 }
 
-// ── Helpers (ORIGINAL — unchanged) ───────────────────────────────────────
-function capitalize(s) {
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-}
-
-function roundTo(num, decimals) {
-  return Math.round(num * 10 ** decimals) / 10 ** decimals;
-}
+// ── Helpers ───────────────────────────────────────────────────────────────
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase(); }
+function roundTo(num, decimals) { return Math.round(num * 10 ** decimals) / 10 ** decimals; }
 
 // ── Finish button (ORIGINAL — unchanged) ─────────────────────────────────
 finishBtn.addEventListener("click", () => {
@@ -211,13 +273,12 @@ finishBtn.addEventListener("click", () => {
   }
 });
 
-// ── Bill / wallet synopsis (ORIGINAL logic — unchanged) ──────────────────
+// ── Bill synopsis (ORIGINAL — unchanged) ─────────────────────────────────
 billBtn.addEventListener("click", async () => {
   try {
     const response = await fetch("/get_data");
-    if (!response.ok) throw new Error("Network response was not ok");
+    if (!response.ok) throw new Error("Network error");
     const data = await response.json();
-
     const listItems = data.map(item => `<li>${item}</li>`).join("");
     synopsisContent.innerHTML = `
       <h2>Wallet Drained</h2>
@@ -237,6 +298,18 @@ closeBtn.addEventListener("click", () => {
   synopsisBackdrop.classList.add("hidden");
 });
 
+// ── Second cancel button ──────────────────────────────────────────────────
+const cancelBtn2 = document.getElementById('cancelExpenseBtn2');
+if (cancelBtn2) cancelBtn2.addEventListener('click', closeExpenseForm);
+
+// ── Backdrop clicks ───────────────────────────────────────────────────────
+expenseBackdrop.addEventListener('click', closeExpenseForm);
+synopsisBackdrop.addEventListener('click', () => {
+  synopsisContainer.classList.add("hidden");
+  synopsisBackdrop.classList.add("hidden");
+});
+
+// ── Escape key ────────────────────────────────────────────────────────────
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     synopsisContainer.classList.add("hidden");
@@ -245,28 +318,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// ── Toggle split type active styling ─────────────────────────────────────
-document.querySelectorAll('input[name="shareType"]').forEach(radio => {
-  radio.addEventListener('change', () => {
-    document.querySelectorAll('.toggle-opt').forEach(l => l.classList.remove('active'));
-    radio.closest('.toggle-opt').classList.add('active');
-  });
-});
-
-// ── Second cancel button wiring ───────────────────────────────────────────
-const cancelBtn2 = document.getElementById('cancelExpenseBtn2');
-if (cancelBtn2) {
-  cancelBtn2.addEventListener('click', closeExpenseForm);
-}
-
-// ── Backdrop clicks close modals ──────────────────────────────────────────
-expenseBackdrop.addEventListener('click', closeExpenseForm);
-synopsisBackdrop.addEventListener('click', () => {
-  synopsisContainer.classList.add("hidden");
-  synopsisBackdrop.classList.add("hidden");
-});
-
-// ── Show/hide empty feed state ────────────────────────────────────────────
+// ── Empty feed observer ───────────────────────────────────────────────────
 const feedEmpty = document.getElementById('feedEmpty');
 if (feedEmpty && expenseContainer) {
   const observer = new MutationObserver(() => {

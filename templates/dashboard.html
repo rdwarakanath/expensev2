@@ -92,26 +92,26 @@
         </label>
         {% endfor %}
       </div>
+
+      <!-- ── Inline custom splits — expands when Custom is selected ── -->
+      <div id="customSplitsSection" class="custom-splits-section collapsed">
+        <div class="splits-inner">
+          <div class="splits-divider">
+            <span class="splits-divider-label">Custom amounts</span>
+          </div>
+          <p class="splits-hint" id="splitsHint">Shares must add up to the total amount.</p>
+          <form id="shareForm" class="inline-share-form"></form>
+          <div class="splits-total-row">
+            <span class="splits-total-label">Remaining</span>
+            <span class="splits-total-value" id="splitsRemaining">₹0.00</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="side-modal-footer">
       <button id="cancelExpenseBtn2" class="btn-ghost">Cancel</button>
       <button id="saveExpenseBtn" class="btn-primary">Save Expense</button>
-    </div>
-  </div>
-
-  <!-- ── UNEQUAL SHARE MODAL ── -->
-  <div id="unequalShare" class="side-modal hidden">
-    <div class="side-modal-header">
-      <h2 class="side-modal-title">Custom Splits</h2>
-    </div>
-    <div class="side-modal-body">
-      <p class="modal-hint" id="unequalHint">Enter each member's share. Must add up to the total.</p>
-      <form id="shareForm" class="share-form"></form>
-    </div>
-    <div class="side-modal-footer">
-      <button id="prevshareBtn" class="btn-ghost" type="button">← Back</button>
-      <button id="saveshareBtn" class="btn-primary" type="button">Confirm Splits</button>
     </div>
   </div>
 
