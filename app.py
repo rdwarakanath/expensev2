@@ -452,6 +452,58 @@ def get_data(trip_id):
     return jsonify(data)
 
 
+@app.route('/get_expenses/<int:trip_id>', methods=['GET'])
+@login_required
+def get_expenses(trip_id):
+    """
+    Return all expenses for a trip so the dashboard can
+    render existing cards on page load.
+    """
+    user_id = session['user_id']
+    conn    = get_db()
+    cur     = conn.cursor()
+
+    # Ownership check
+    cur.execute(
+        "SELECT id FROM trips WHERE id = ? AND user_id = ?",
+        (trip_id, user_id)
+    )
+    if not cur.fetchone():
+        conn.close()
+        return jsonify([])
+
+    # Fetch each expense with payer name
+    cur.execute("""
+        SELECT e.id, e.description, e.amount, m.name AS payer_name
+        FROM   expenses e
+        JOIN   members  m ON e.payer_id = m.id
+        WHERE  e.trip_id = ?
+        ORDER  BY e.created_at
+    """, (trip_id,))
+    expenses = cur.fetchall()
+
+    result = []
+    for exp in expenses:
+        # Fetch splits for this expense
+        cur.execute("""
+            SELECT m.name AS member_name, es.share_amount
+            FROM   expense_splits es
+            JOIN   members        m ON es.member_id = m.id
+            WHERE  es.expense_id = ?
+        """, (exp["id"],))
+        splits = cur.fetchall()
+
+        result.append({
+            "reason":  exp["description"],
+            "amount":  exp["amount"],
+            "whopaid": exp["payer_name"],
+            "splits":  [{"name": s["member_name"], "share": s["share_amount"]} for s in splits]
+        })
+
+    conn.close()
+    return jsonify(result)
+
+
 @app.route('/finish_trip/<int:trip_id>', methods=['POST'])
 @login_required
 def finish_trip(trip_id):

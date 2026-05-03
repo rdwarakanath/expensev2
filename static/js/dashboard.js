@@ -328,4 +328,37 @@ if (feedEmpty && expenseContainer) {
   observer.observe(expenseContainer, { childList: true });
 }
 
+// ── Load existing expenses from DB on page load ───────────────────────────
+// Renders cards for expenses already saved in a previous session,
+// using the same HTML structure as addExpenseCard so they look identical.
+async function loadExistingExpenses() {
+  try {
+    const response = await fetch(`/get_expenses/${tripId}`);
+    if (!response.ok) return;
+    const expenses = await response.json();
+
+    expenses.forEach(exp => {
+      const card = document.createElement("div");
+      card.className = "expense-card";
+
+      const membersList = exp.splits
+        .map(s => `<li>${capitalize(s.name)}: <strong style="color:var(--amber)">₹${s.share}</strong></li>`)
+        .join("");
+
+      card.innerHTML = `
+        <strong>${exp.reason.toUpperCase()}</strong>
+        <p style="color:var(--text-secondary);font-size:0.88rem;margin:4px 0 10px">
+          ₹${exp.amount} paid by <span style="color:var(--amber);font-weight:700">${capitalize(exp.whopaid)}</span>
+        </p>
+        <ul style="list-style:none;padding:0">${membersList}</ul>
+      `;
+      expenseContainer.appendChild(card);
+    });
+  } catch (err) {
+    console.error("Could not load existing expenses:", err);
+  }
+}
+
+loadExistingExpenses();
+
 }); // end DOMContentLoaded
