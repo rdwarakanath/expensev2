@@ -185,6 +185,12 @@ body {
   from { opacity: 0; transform: translateY(16px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+/* For centered modals (home page) that use translate(-50%,-50%) centering —
+   the animation must include the centering transform or it gets overwritten */
+@keyframes modalInCentered {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 16px)) scale(0.97); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
 .hidden { display: none !important; }
 
 .modal-step {
@@ -1069,4 +1075,6 @@ body {
   z-index: 100;
   width: 100%;
   max-width: 420px;
+  /* Use centered animation so transform origin stays correct */
+  animation: modalInCentered 0.28s cubic-bezier(0.34,1.56,0.64,1);
 }
