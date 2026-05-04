@@ -25,8 +25,8 @@
   --radius-md:  14px;
   --radius-lg:  20px;
 
-  --font-display: 'Syne', sans-serif;
-  --font-body:    'DM Sans', sans-serif;
+  --font-display: 'Syne', 'Segoe UI', Arial, sans-serif;
+  --font-body:    'DM Sans', 'Segoe UI', Arial, sans-serif;
 
   --shadow-card: 0 4px 24px rgba(0,0,0,0.45);
 }
@@ -334,4 +334,80 @@ body {
   margin-top: 10px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+/* ── Settlement toggle (Original / Optimized) ──────────────────────────── */
+.section-heading {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.settle-toggle {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;       /* pushes toggle to the right of the heading */
+}
+.settle-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+.settle-toggle-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+}
+.settle-toggle-btn.active {
+  background: var(--amber-dim);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.settle-count {
+  background: rgba(255,255,255,0.08);
+  border-radius: 100px;
+  padding: 1px 7px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.settle-toggle-btn.active .settle-count {
+  background: rgba(251,191,36,0.2);
+}
+
+/* Optimized cards use amber accent instead of green */
+.settle-card-optimized {
+  background: var(--amber-dim);
+  border-color: rgba(251,191,36,0.25);
+}
+.settle-card-optimized .settle-amt { color: var(--amber); }
+
+/* Zero transactions message */
+.settle-zero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--green-dim);
+  border: 1px solid rgba(52,211,153,0.25);
+  border-radius: var(--radius-md);
+  padding: 20px 24px;
+  color: var(--green);
+}
+.settle-zero-icon {
+  font-size: 1.4rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.settle-zero p {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }

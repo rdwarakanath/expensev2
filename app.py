@@ -111,10 +111,72 @@ def process_expense(data, trip_id):
     conn.close()
 
 
+def simplify_debts(balances):
+    """
+    Greedy debt simplification algorithm.
+    Takes the balances dict already computed in calculate_results()
+    and returns a minimized list of settlement strings.
+
+    Algorithm:
+      1. Compute net balance per person (total owed minus total receivable)
+      2. Split into creditors (net > 0) and debtors (net < 0)
+      3. Greedily match largest debtor with largest creditor
+      4. Settle minimum of the two, advance pointer of whoever hits zero
+      5. If all balances cancel out, return empty list
+    """
+    # Step 1: Net balance per person
+    net = {}
+    for person in balances:
+        for creditor, amount in balances[person].items():
+            net[person]   = round(net.get(person, 0) - amount, 2)
+            net[creditor] = round(net.get(creditor, 0) + amount, 2)
+
+    # Step 2: Separate, skip near-zero balances
+    creditors = []
+    debtors   = []
+    for person, amt in net.items():
+        if amt > 0.01:
+            creditors.append([person, amt])
+        elif amt < -0.01:
+            debtors.append([person, -amt])
+
+    # Edge case: everything cancels out
+    if not creditors and not debtors:
+        return []
+
+    # Step 3: Sort descending
+    creditors.sort(key=lambda x: x[1], reverse=True)
+    debtors.sort(key=lambda x: x[1], reverse=True)
+
+    # Step 4: Greedy matching
+    result = []
+    i, j   = 0, 0
+
+    while i < len(debtors) and j < len(creditors):
+        debtor,   debt_amt   = debtors[i]
+        creditor, credit_amt = creditors[j]
+
+        if debtor == creditor:
+            i += 1
+            continue
+
+        settle = round(min(debt_amt, credit_amt), 2)
+        result.append(f"{debtor} has to pay ₹{settle:.2f} to {creditor}")
+
+        debtors[i][1]   = round(debtors[i][1]   - settle, 2)
+        creditors[j][1] = round(creditors[j][1] - settle, 2)
+
+        if debtors[i][1]   < 0.01: i += 1
+        if creditors[j][1] < 0.01: j += 1
+
+    return result
+
+
 def calculate_results(trip_id):
     """
     Compute settlements, total spent, transactions from DB.
-    COMPLETELY UNCHANGED — same logic as before.
+    CHANGED: now also runs simplify_debts() and returns simplified list.
+    All other logic completely unchanged.
     """
     conn = get_db()
     cur  = conn.cursor()
@@ -186,12 +248,15 @@ def calculate_results(trip_id):
         for t in transactions
     ]
 
-    return outputpayto, totspent, transactions_final
+    # Run greedy simplification on the same balances dict
+    simplified = simplify_debts(balances)
+
+    return outputpayto, simplified, totspent, transactions_final
 
 
 def fetch_total_spent_data(trip_id):
     """Return spending summary strings. UNCHANGED."""
-    _, totspent, _ = calculate_results(trip_id)
+    _, _simplified, totspent, _ = calculate_results(trip_id)
     if totspent is None:
         return []
     return [line.replace(" : ", " spent ") for line in totspent]
@@ -544,7 +609,7 @@ def results(trip_id):
     if not trip:
         return "Trip not found.", 404
 
-    payday, totspent, transactions = calculate_results(trip_id)   # UNCHANGED
+    payday, simplified, totspent, transactions = calculate_results(trip_id)
 
     if payday is None:
         return render_template('results.html',
@@ -558,7 +623,8 @@ def results(trip_id):
                            trip_id=trip_id,
                            transactions=transactions,
                            totspent=totspent,
-                           payday=payday)
+                           payday=payday,
+                           simplified=simplified)
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────

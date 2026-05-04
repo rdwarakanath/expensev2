@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Trip Summary</title>
+  <title>PayBait — Trip Summary</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
@@ -108,8 +108,23 @@
       <div class="section-heading">
         <span class="section-icon settle-icon">💳</span>
         <h2>Settlements</h2>
+        <!-- Toggle buttons -->
+        <div class="settle-toggle">
+          <button class="settle-toggle-btn active" id="btnOriginal"
+                  onclick="showSettle('original')">
+            Original
+            <span class="settle-count">{{ payday|length }}</span>
+          </button>
+          <button class="settle-toggle-btn" id="btnOptimized"
+                  onclick="showSettle('optimized')">
+            Optimized ✦
+            <span class="settle-count">{{ simplified|length if simplified else 0 }}</span>
+          </button>
+        </div>
       </div>
-      <div class="settle-list">
+
+      <!-- Original settlements -->
+      <div id="settleOriginal" class="settle-list">
         {% for p in payday %}
         {% set paytext = p %}
         {% set parts   = paytext.split(' has to pay ₹') %}
@@ -142,6 +157,43 @@
         {% endif %}
         {% endfor %}
       </div>
+
+      <!-- Optimized settlements (hidden by default) -->
+      <div id="settleOptimized" class="settle-list" style="display:none">
+        {% if simplified %}
+          {% for p in simplified %}
+          {% set parts  = p.split(' has to pay ₹') %}
+          {% set payer  = parts[0].strip() %}
+          {% set rest2  = parts[1] %}
+          {% set ar     = rest2.split(' to ') %}
+          {% set amount = ar[0].strip() %}
+          {% set recip  = ar[1].strip() if ar|length > 1 else '' %}
+          {% if payer and recip and amount %}
+          <div class="settle-card settle-card-optimized">
+            <div class="settle-person payer-side">
+              <div class="settle-avatar payer-av">{{ payer[0]|upper }}</div>
+              <span class="settle-name">{{ payer }}</span>
+            </div>
+            <div class="settle-arrow">
+              <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
+                <path d="M1 7h28M23 1l7 6-7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="settle-amt">₹{{ amount }}</span>
+            </div>
+            <div class="settle-person recip-side">
+              <div class="settle-avatar recip-av">{{ recip[0]|upper }}</div>
+              <span class="settle-name">{{ recip }}</span>
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        {% else %}
+          <div class="settle-zero">
+            <span class="settle-zero-icon">✓</span>
+            <p>No transactions needed — all balances cancel out perfectly.</p>
+          </div>
+        {% endif %}
+      </div>
     </section>
     {% endif %}
 
@@ -152,6 +204,26 @@
   </div><!-- /results-wrap -->
 
   <script>
+    // Toggle between original and optimized settlements
+    function showSettle(mode) {
+      const original  = document.getElementById('settleOriginal');
+      const optimized = document.getElementById('settleOptimized');
+      const btnOrig   = document.getElementById('btnOriginal');
+      const btnOpt    = document.getElementById('btnOptimized');
+
+      if (mode === 'original') {
+        original.style.display  = '';
+        optimized.style.display = 'none';
+        btnOrig.classList.add('active');
+        btnOpt.classList.remove('active');
+      } else {
+        original.style.display  = 'none';
+        optimized.style.display = '';
+        btnOrig.classList.remove('active');
+        btnOpt.classList.add('active');
+      }
+    }
+
     // Parse and render split breakdowns
     document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.splits-grid').forEach(grid => {
