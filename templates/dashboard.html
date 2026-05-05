@@ -144,6 +144,23 @@
     <div class="expense-grid" id="expenseContainer"></div>
   </main>
 
+  <!-- ── CONFIRM DELETE MODAL (reused for both trip and expense deletion) ── -->
+  <div id="confirmModal" class="center-modal hidden">
+    <div class="center-modal-inner">
+      <div class="center-modal-header">
+        <h2 class="center-modal-title" id="confirmTitle">Confirm Delete</h2>
+      </div>
+      <div style="padding: 16px 24px 24px">
+        <p id="confirmMessage" style="color:var(--text-secondary);font-size:0.95rem;line-height:1.6;margin-bottom:20px"></p>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button id="confirmCancelBtn" class="btn-ghost">Cancel</button>
+          <button id="confirmDeleteBtn" style="background:var(--red);color:#fff;font-family:var(--font-display);font-weight:700;font-size:0.92rem;padding:10px 22px;border:none;border-radius:var(--radius-sm);cursor:pointer;transition:opacity 0.2s">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop hidden" id="confirmBackdrop"></div>
+
   <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

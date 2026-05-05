@@ -103,12 +103,12 @@
     {% endif %}
 
     <!-- ── WHO PAYS WHOM ── -->
-    {% if payday %}
+    {% if totspent %}
     <section class="results-section" style="animation-delay: 0.3s">
       <div class="section-heading">
         <span class="section-icon settle-icon">💳</span>
         <h2>Settlements</h2>
-        <!-- Toggle buttons -->
+        <!-- Toggle buttons — always shown when there is trip data -->
         <div class="settle-toggle">
           <button class="settle-toggle-btn active" id="btnOriginal"
                   onclick="showSettle('original')">
@@ -125,37 +125,44 @@
 
       <!-- Original settlements -->
       <div id="settleOriginal" class="settle-list">
-        {% for p in payday %}
-        {% set paytext = p %}
-        {% set parts   = paytext.split(' has to pay ₹') %}
-        {% if parts|length > 1 %}
-          {% set payer  = parts[0].strip() %}
-          {% set rest2  = parts[1] %}
-          {% set ar     = rest2.split(' to ') %}
-          {% set amount = ar[0].strip() %}
-          {% set recip  = ar[1].strip() if ar|length > 1 else '' %}
+        {% if payday %}
+          {% for p in payday %}
+          {% set paytext = p %}
+          {% set parts   = paytext.split(' has to pay ₹') %}
+          {% if parts|length > 1 %}
+            {% set payer  = parts[0].strip() %}
+            {% set rest2  = parts[1] %}
+            {% set ar     = rest2.split(' to ') %}
+            {% set amount = ar[0].strip() %}
+            {% set recip  = ar[1].strip() if ar|length > 1 else '' %}
+          {% else %}
+            {% set payer = '' %}{% set amount = '' %}{% set recip = '' %}
+          {% endif %}
+          {% if payer and recip and amount %}
+          <div class="settle-card">
+            <div class="settle-person payer-side">
+              <div class="settle-avatar payer-av">{{ payer[0]|upper }}</div>
+              <span class="settle-name">{{ payer }}</span>
+            </div>
+            <div class="settle-arrow">
+              <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
+                <path d="M1 7h28M23 1l7 6-7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="settle-amt">₹{{ amount }}</span>
+            </div>
+            <div class="settle-person recip-side">
+              <div class="settle-avatar recip-av">{{ recip[0]|upper }}</div>
+              <span class="settle-name">{{ recip }}</span>
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
         {% else %}
-          {% set payer = '' %}{% set amount = '' %}{% set recip = '' %}
+          <div class="settle-zero">
+            <span class="settle-zero-icon">✓</span>
+            <p>No transactions needed — all balances cancel out perfectly.</p>
+          </div>
         {% endif %}
-        {% if payer and recip and amount %}
-        <div class="settle-card">
-          <div class="settle-person payer-side">
-            <div class="settle-avatar payer-av">{{ payer[0]|upper }}</div>
-            <span class="settle-name">{{ payer }}</span>
-          </div>
-          <div class="settle-arrow">
-            <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
-              <path d="M1 7h28M23 1l7 6-7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span class="settle-amt">₹{{ amount }}</span>
-          </div>
-          <div class="settle-person recip-side">
-            <div class="settle-avatar recip-av">{{ recip[0]|upper }}</div>
-            <span class="settle-name">{{ recip }}</span>
-          </div>
-        </div>
-        {% endif %}
-        {% endfor %}
       </div>
 
       <!-- Optimized settlements (hidden by default) -->

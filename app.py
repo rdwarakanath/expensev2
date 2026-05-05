@@ -109,6 +109,7 @@ def process_expense(data, trip_id):
 
     conn.commit()
     conn.close()
+    return expense_id   # returned so route can pass it to JS
 
 
 def simplify_debts(balances):
@@ -388,40 +389,65 @@ def home():
 # ── TRIP CREATION ROUTES ──────────────────────────────────
 # =========================================================
 
+@app.route('/create_trip', methods=['POST'])
+@login_required
+def create_trip_route():
+    """
+    Atomic trip creation — receives trip name + members together
+    and writes both in a single DB transaction.
+
+    This replaces the old two-step save_trip + save_members flow
+    which left orphan trips in the DB if the user cancelled midway.
+    """
+    data      = request.get_json() or {}
+    trip_name = data.get('tripName', '').strip()
+    members   = data.get('members', [])
+    user_id   = session['user_id']
+
+    if not trip_name:
+        return jsonify({"error": "Trip name is required"}), 400
+    if not members or len(members) < 1:
+        return jsonify({"error": "At least one member is required"}), 400
+
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        # Insert trip
+        cur.execute(
+            "INSERT INTO trips (trip_name, user_id, is_active) VALUES (?, ?, 1)",
+            (trip_name, user_id)
+        )
+        trip_id = cur.lastrowid
+
+        # Insert all members in same transaction
+        for m in members:
+            cur.execute(
+                "INSERT INTO members (trip_id, name) VALUES (?, ?)",
+                (trip_id, m.strip())
+            )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+    return jsonify({"message": "Trip created!", "trip_id": trip_id})
+
+
+# Kept for backward compatibility but no longer used by the frontend
 @app.route('/save_trip', methods=['POST'])
 @login_required
 def save_trip():
-    trip_name = request.json.get('tripName')
-    user_id   = session['user_id']
-
-    # CHANGED: pass user_id to create_trip
-    trip_id = create_trip(trip_name, user_id)
-
-    # Still store in session temporarily for the creation flow
-    # (save_members needs it before we redirect to /dashboard/<trip_id>)
-    session['pending_trip_id']   = trip_id
-    session['pending_trip_name'] = trip_name
-
-    return jsonify({"message": "Trip saved!", "trip_id": trip_id})
+    return jsonify({"message": "Use /create_trip instead"}), 410
 
 
 @app.route('/save_members', methods=['POST'])
 @login_required
 def save_members():
-    members = request.json.get('members')
-    # CHANGED: read from pending_trip_id set during save_trip
-    trip_id = session.get('pending_trip_id')
-
-    if not trip_id:
-        return jsonify({"error": "Trip not found"}), 400
-
-    add_members_to_db(trip_id, members)
-
-    # Clear pending keys — trip_id now lives in URL from here on
-    session.pop('pending_trip_id', None)
-    session.pop('pending_trip_name', None)
-
-    return jsonify({"message": "Members saved!", "trip_id": trip_id})
+    return jsonify({"message": "Use /create_trip instead"}), 410
 
 
 # =========================================================
@@ -490,11 +516,11 @@ def add_expense(trip_id):
         return jsonify({"status": "error", "message": "This trip is finished."}), 403
 
     try:
-        process_expense(data, trip_id)   # UNCHANGED helper
+        expense_id = process_expense(data, trip_id)   # returns new expense_id
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 
-    return jsonify({"status": "success"})
+    return jsonify({"status": "success", "expense_id": expense_id})
 
 
 @app.route('/get_data/<int:trip_id>', methods=['GET'])
@@ -559,6 +585,7 @@ def get_expenses(trip_id):
         splits = cur.fetchall()
 
         result.append({
+            "id":      exp["id"],          # needed for delete_expense route
             "reason":  exp["description"],
             "amount":  exp["amount"],
             "whopaid": exp["payer_name"],
@@ -626,6 +653,104 @@ def results(trip_id):
                            payday=payday,
                            simplified=simplified)
 
+
+
+# =========================================================
+# ── DELETE ROUTES ─────────────────────────────────────────
+# =========================================================
+
+@app.route('/delete_trip/<int:trip_id>', methods=['POST'])
+@login_required
+def delete_trip(trip_id):
+    """
+    Delete a trip and all its related data.
+    Manual cascade order: expense_splits → expenses → members → trip
+    Ownership verified before any deletion.
+    """
+    user_id = session['user_id']
+    conn    = get_db()
+    cur     = conn.cursor()
+
+    # Ownership check
+    cur.execute(
+        "SELECT id FROM trips WHERE id = ? AND user_id = ?",
+        (trip_id, user_id)
+    )
+    if not cur.fetchone():
+        conn.close()
+        return jsonify({"status": "error", "message": "Trip not found or unauthorized"}), 404
+
+    try:
+        # Step 1: delete expense_splits for all expenses of this trip
+        cur.execute("""
+            DELETE FROM expense_splits
+            WHERE expense_id IN (
+                SELECT id FROM expenses WHERE trip_id = ?
+            )
+        """, (trip_id,))
+
+        # Step 2: delete expenses
+        cur.execute("DELETE FROM expenses WHERE trip_id = ?", (trip_id,))
+
+        # Step 3: delete members
+        cur.execute("DELETE FROM members WHERE trip_id = ?", (trip_id,))
+
+        # Step 4: delete trip
+        cur.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        conn.close()
+
+    return jsonify({"status": "success"})
+
+
+@app.route('/delete_expense/<int:expense_id>', methods=['POST'])
+@login_required
+def delete_expense(expense_id):
+    """
+    Delete a single expense and its splits.
+    Verifies the expense belongs to a trip owned by the current user.
+    Only allowed on active trips (finished trips are read-only).
+    """
+    user_id = session['user_id']
+    conn    = get_db()
+    cur     = conn.cursor()
+
+    # Verify expense exists and belongs to a trip owned by this user
+    cur.execute("""
+        SELECT e.id, t.is_active
+        FROM   expenses e
+        JOIN   trips    t ON e.trip_id = t.id
+        WHERE  e.id = ? AND t.user_id = ?
+    """, (expense_id, user_id))
+    row = cur.fetchone()
+
+    if not row:
+        conn.close()
+        return jsonify({"status": "error", "message": "Expense not found or unauthorized"}), 404
+
+    if not row['is_active']:
+        conn.close()
+        return jsonify({"status": "error", "message": "Cannot edit a finished trip"}), 403
+
+    try:
+        # Delete splits first, then expense
+        cur.execute("DELETE FROM expense_splits WHERE expense_id = ?", (expense_id,))
+        cur.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        conn.close()
+
+    return jsonify({"status": "success"})
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':

@@ -1078,3 +1078,64 @@ body {
   /* Use centered animation so transform origin stays correct */
   animation: modalInCentered 0.28s cubic-bezier(0.34,1.56,0.64,1);
 }
+
+/* ── Delete buttons ──────────────────────────────────────────────────────── */
+
+/* Trip row delete button (home page) */
+.trip-delete-btn {
+  background: transparent;
+  border: 1px solid rgba(248,113,113,0.25);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+.trip-delete-btn:hover {
+  background: var(--red-dim);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* Expense card top row — title + delete button side by side */
+.card-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.card-top-row strong {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+}
+
+/* Expense card delete button */
+.card-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.card-delete-btn:hover {
+  color: var(--red);
+  background: var(--red-dim);
+}
+
+/* Confirm modal delete button hover */
+#confirmDeleteBtn:hover, #homeDeleteBtn:hover {
+  opacity: 0.85;
+}

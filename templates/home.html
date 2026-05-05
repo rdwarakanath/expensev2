@@ -62,6 +62,10 @@
             <span class="trip-badge badge-done">✓ Done</span>
             <a href="/results/{{ trip.id }}" class="btn-ghost trip-btn">View Results</a>
           {% endif %}
+          <button class="trip-delete-btn"
+                  data-id="{{ trip.id }}"
+                  data-name="{{ trip.trip_name }}"
+                  title="Delete trip">🗑</button>
         </div>
       </div>
       {% endfor %}
@@ -148,18 +152,13 @@
 
     cancelBtn.addEventListener("click", hideAll);
 
-    saveBtn.addEventListener("click", async () => {
+    saveBtn.addEventListener("click", () => {
       const tripName = document.getElementById("tripNameInput").value.trim();
       if (!tripName) { shakeField("tripNameInput"); return; }
 
-      const res  = await fetch("/save_trip", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tripName })
-      });
-      const data = await res.json();
-      // Store trip_id returned by server for the member step
-      window._pendingTripId = data.trip_id;
+      // Just store the name — no DB write yet.
+      // Trip is only created when members are confirmed (Step 3).
+      window._pendingTripName = tripName;
 
       hideModal(tripBox);
       setTimeout(() => showModal(memberCountBox), 120);
@@ -208,14 +207,25 @@
       saveMembersBtn.textContent = "Creating…";
       saveMembersBtn.disabled    = true;
 
-      const res  = await fetch("/save_members", {
+      // Single atomic call — trip + members created together.
+      // If user cancelled before this, nothing was written to DB.
+      const res  = await fetch("/create_trip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ members })
+        body: JSON.stringify({
+          tripName: window._pendingTripName,
+          members:  members
+        })
       });
       const data = await res.json();
 
-      // Redirect to URL-based dashboard with trip_id
+      if (data.error) {
+        alert("Error: " + data.error);
+        saveMembersBtn.textContent = "Create Trip ✓";
+        saveMembersBtn.disabled    = false;
+        return;
+      }
+
       window.location.href = `/dashboard/${data.trip_id}`;
     });
 
@@ -234,6 +244,73 @@
       el.focus();
       setTimeout(() => el.classList.remove("shake"), 500);
     }
+  </script>
+
+  <!-- ── CONFIRM DELETE MODAL ── -->
+  <div id="homeConfirmModal" class="center-modal hidden">
+    <div class="center-modal-inner">
+      <div class="center-modal-header">
+        <h2 class="center-modal-title">Delete Trip</h2>
+      </div>
+      <div style="padding:16px 24px 24px">
+        <p id="homeConfirmMsg" style="color:var(--text-secondary);font-size:0.95rem;line-height:1.6;margin-bottom:20px"></p>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button id="homeCancelBtn" class="btn-ghost">Cancel</button>
+          <button id="homeDeleteBtn" style="background:var(--red);color:#fff;font-family:var(--font-display);font-weight:700;font-size:0.92rem;padding:10px 22px;border:none;border-radius:var(--radius-sm);cursor:pointer">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop hidden" id="homeConfirmBackdrop"></div>
+
+  <script>
+    const homeModal    = document.getElementById('homeConfirmModal');
+    const homeBdrop    = document.getElementById('homeConfirmBackdrop');
+    const homeMsg      = document.getElementById('homeConfirmMsg');
+    const homeDelBtn   = document.getElementById('homeDeleteBtn');
+    const homeCancelBtn = document.getElementById('homeCancelBtn');
+
+    function showHomeConfirm(tripId, tripName, rowEl) {
+      homeMsg.textContent    = `Delete "${tripName}" and all its expenses? This cannot be undone.`;
+      homeModal.classList.remove('hidden');
+      homeBdrop.classList.remove('hidden');
+      homeDelBtn.disabled    = false;
+
+      homeDelBtn.onclick = async () => {
+        homeDelBtn.disabled = true;   // prevent double-click
+        const res    = await fetch(`/delete_trip/${tripId}`, { method: 'POST' });
+        const result = await res.json();
+        if (result.status === 'success') {
+          rowEl.style.transition = 'opacity 0.3s';
+          rowEl.style.opacity    = '0';
+          setTimeout(() => rowEl.remove(), 300);
+        } else {
+          alert('⚠ ' + (result.message || 'Failed to delete trip.'));
+        }
+        hideHomeConfirm();
+      };
+    }
+
+    function hideHomeConfirm() {
+      homeModal.classList.add('hidden');
+      homeBdrop.classList.add('hidden');
+    }
+
+    homeCancelBtn.addEventListener('click', hideHomeConfirm);
+    homeBdrop.addEventListener('click',    hideHomeConfirm);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') hideHomeConfirm();
+    });
+
+    // Wire all delete buttons
+    document.querySelectorAll('.trip-delete-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row  = btn.closest('.trip-row');
+        const id   = btn.dataset.id;
+        const name = btn.dataset.name;
+        showHomeConfirm(id, name, row);
+      });
+    });
   </script>
 </body>
 </html>

@@ -221,19 +221,8 @@ async function addExpenseCard(reason, amount, members, shares, whopaid) {
     const result = await response.json();
 
     if (result.status === "success") {
-      const card = document.createElement("div");
-      card.className = "expense-card";
-      const membersList = members
-        .map((m, i) => `<li>${capitalize(m)}: <strong style="color:var(--amber)">₹${shares[i]}</strong></li>`)
-        .join("");
-      card.innerHTML = `
-        <strong>${reason.toUpperCase()}</strong>
-        <p style="color:var(--text-secondary);font-size:0.88rem;margin:4px 0 10px">
-          ₹${amount} paid by <span style="color:var(--amber);font-weight:700">${capitalize(whopaid)}</span>
-        </p>
-        <ul style="list-style:none;padding:0">${membersList}</ul>
-      `;
-      expenseContainer.appendChild(card);
+      const expenseId = result.expense_id;
+      buildExpenseCard(reason, amount, members, shares, whopaid, expenseId);
     } else if (result.status === "error") {
       alert(`⚠ ${result.message || "Failed to save expense."}`);
     } else {
@@ -315,6 +304,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     synopsisContainer.classList.add("hidden");
     synopsisBackdrop.classList.add("hidden");
+    hideConfirm();
     closeExpenseForm();
   }
 });
@@ -328,6 +318,81 @@ if (feedEmpty && expenseContainer) {
   observer.observe(expenseContainer, { childList: true });
 }
 
+// ── Confirm modal system ─────────────────────────────────────────────────
+// Single modal reused for any delete confirmation.
+const confirmModal    = document.getElementById('confirmModal');
+const confirmBackdrop = document.getElementById('confirmBackdrop');
+const confirmTitle    = document.getElementById('confirmTitle');
+const confirmMessage  = document.getElementById('confirmMessage');
+const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+
+function showConfirm(title, message, onConfirm) {
+  confirmTitle.textContent   = title;
+  confirmMessage.textContent = message;
+  confirmModal.classList.remove('hidden');
+  confirmBackdrop.classList.remove('hidden');
+  confirmDeleteBtn.disabled  = false;
+
+  // Reassign onclick directly — cleanest way to swap the callback
+  // without stacking multiple listeners from previous calls.
+  confirmDeleteBtn.onclick = async () => {
+    confirmDeleteBtn.disabled = true;   // prevent double-click
+    await onConfirm();
+    hideConfirm();
+  };
+}
+
+function hideConfirm() {
+  confirmModal.classList.add('hidden');
+  confirmBackdrop.classList.add('hidden');
+}
+
+confirmCancelBtn.addEventListener('click', hideConfirm);
+confirmBackdrop.addEventListener('click', hideConfirm);
+
+// ── buildExpenseCard — shared by addExpenseCard and loadExistingExpenses ───
+// Builds a card DOM element with a delete button and appends to the grid.
+function buildExpenseCard(reason, amount, memberNames, shares, whopaid, expenseId) {
+  const card = document.createElement("div");
+  card.className = "expense-card";
+  card.dataset.expenseId = expenseId;
+
+  const membersList = memberNames
+    .map((m, i) => `<li>${capitalize(m)}: <strong style="color:var(--amber)">₹${shares[i]}</strong></li>`)
+    .join("");
+
+  card.innerHTML = `
+    <div class="card-top-row">
+      <strong>${reason.toUpperCase()}</strong>
+      <button class="card-delete-btn" title="Delete expense">🗑</button>
+    </div>
+    <p style="color:var(--text-secondary);font-size:0.88rem;margin:4px 0 10px">
+      ₹${amount} paid by <span style="color:var(--amber);font-weight:700">${capitalize(whopaid)}</span>
+    </p>
+    <ul style="list-style:none;padding:0">${membersList}</ul>
+  `;
+
+  // Wire delete button
+  card.querySelector('.card-delete-btn').addEventListener('click', () => {
+    showConfirm(
+      'Delete Expense',
+      `Delete "${reason}" (₹${amount})? This cannot be undone.`,
+      async () => {
+        const res    = await fetch(`/delete_expense/${expenseId}`, { method: 'POST' });
+        const result = await res.json();
+        if (result.status === 'success') {
+          card.remove();
+        } else {
+          alert('⚠ ' + (result.message || 'Failed to delete expense.'));
+        }
+      }
+    );
+  });
+
+  expenseContainer.appendChild(card);
+}
+
 // ── Load existing expenses from DB on page load ───────────────────────────
 // Renders cards for expenses already saved in a previous session,
 // using the same HTML structure as addExpenseCard so they look identical.
@@ -338,21 +403,10 @@ async function loadExistingExpenses() {
     const expenses = await response.json();
 
     expenses.forEach(exp => {
-      const card = document.createElement("div");
-      card.className = "expense-card";
-
-      const membersList = exp.splits
-        .map(s => `<li>${capitalize(s.name)}: <strong style="color:var(--amber)">₹${s.share}</strong></li>`)
-        .join("");
-
-      card.innerHTML = `
-        <strong>${exp.reason.toUpperCase()}</strong>
-        <p style="color:var(--text-secondary);font-size:0.88rem;margin:4px 0 10px">
-          ₹${exp.amount} paid by <span style="color:var(--amber);font-weight:700">${capitalize(exp.whopaid)}</span>
-        </p>
-        <ul style="list-style:none;padding:0">${membersList}</ul>
-      `;
-      expenseContainer.appendChild(card);
+      buildExpenseCard(exp.reason, exp.amount,
+        exp.splits.map(s => s.name),
+        exp.splits.map(s => s.share),
+        exp.whopaid, exp.id);
     });
   } catch (err) {
     console.error("Could not load existing expenses:", err);

@@ -111,15 +111,12 @@
       setTimeout(() => { heroText.style.opacity = "1"; heroText.style.transform = ""; }, 20);
     });
 
-    saveBtn.addEventListener("click", async () => {
+    saveBtn.addEventListener("click", () => {
       const tripName = document.getElementById("tripNameInput").value.trim();
       if (!tripName) { shakeField("tripNameInput"); return; }
 
-      await fetch("/save_trip", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tripName })
-      });
+      // Store name only — no DB write until Step 3 confirms members.
+      window._pendingTripName = tripName;
 
       hideModal(tripBox);
       setTimeout(() => showModal(memberCountBox), 120);
@@ -165,15 +162,27 @@
       const lower = members.map(n => n.toLowerCase());
       if (new Set(lower).size !== lower.length) { alert("Names must be unique."); return; }
 
-      saveMembersBtn.textContent = "Saving…";
+      saveMembersBtn.textContent = "Creating…";
       saveMembersBtn.disabled = true;
 
-      const res  = await fetch("/save_members", {
+      // Single atomic call — trip + members written together.
+      // Cancelling before this step leaves nothing in the DB.
+      const res  = await fetch("/create_trip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ members })
+        body: JSON.stringify({
+          tripName: window._pendingTripName,
+          members:  members
+        })
       });
       const data = await res.json();
+
+      if (data.error) {
+        alert("Error: " + data.error);
+        saveMembersBtn.textContent = "Create Trip ✓";
+        saveMembersBtn.disabled    = false;
+        return;
+      }
 
       window.location.href = `/dashboard/${data.trip_id}`;
     });
