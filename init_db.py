@@ -17,26 +17,29 @@ CREATE TABLE IF NOT EXISTS users (
 """)
 
 # ── Table 2: trips ───────────────────────────────────────────────────────────
-# Created with full structure. If table already exists, we patch it below.
 cur.execute("""
 CREATE TABLE IF NOT EXISTS trips (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER,
+    created_by  INTEGER,
     trip_name   TEXT NOT NULL,
     is_active   INTEGER NOT NULL DEFAULT 1,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (created_by) REFERENCES users(id)
 )
 """)
 
-# ── Patch existing trips table if columns are missing ────────────────────────
-# This runs safely even if DB was created before — ALTER TABLE is ignored
-# if columns already exist (handled via try/except).
+# ── Patch trips table safely ─────────────────────────────────────────────────
 existing_cols = [row[1] for row in cur.execute("PRAGMA table_info(trips)").fetchall()]
 
-if "user_id" not in existing_cols:
-    cur.execute("ALTER TABLE trips ADD COLUMN user_id INTEGER REFERENCES users(id)")
-    print("Patched trips: added user_id")
+if "user_id" not in existing_cols and "created_by" not in existing_cols:
+    cur.execute("ALTER TABLE trips ADD COLUMN created_by INTEGER REFERENCES users(id)")
+    print("Patched trips: added created_by")
+elif "user_id" in existing_cols and "created_by" not in existing_cols:
+    # Rename user_id → created_by for existing DBs
+    # SQLite does not support RENAME COLUMN before 3.25, so we add created_by and copy
+    cur.execute("ALTER TABLE trips ADD COLUMN created_by INTEGER REFERENCES users(id)")
+    cur.execute("UPDATE trips SET created_by = user_id")
+    print("Patched trips: migrated user_id → created_by")
 
 if "is_active" not in existing_cols:
     cur.execute("ALTER TABLE trips ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
@@ -66,6 +69,23 @@ CREATE TABLE IF NOT EXISTS expenses (
 )
 """)
 
+# ── Table: trip_users (NEW — access control) ─────────────────────────────────
+cur.execute("""
+CREATE TABLE IF NOT EXISTS trip_users (
+    trip_id  INTEGER NOT NULL,
+    user_id  INTEGER NOT NULL,
+    PRIMARY KEY (trip_id, user_id),
+    FOREIGN KEY (trip_id) REFERENCES trips(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+)
+""")
+
+# ── Patch members table — add user_id column (nullable) ──────────────────────
+member_cols = [row[1] for row in cur.execute("PRAGMA table_info(members)").fetchall()]
+if "user_id" not in member_cols:
+    cur.execute("ALTER TABLE members ADD COLUMN user_id INTEGER REFERENCES users(id)")
+    print("Patched members: added user_id")
+
 # ── Table 5: expense_splits (unchanged) ──────────────────────────────────────
 cur.execute("""
 CREATE TABLE IF NOT EXISTS expense_splits (
@@ -82,4 +102,4 @@ conn.commit()
 conn.close()
 
 print("Database initialised successfully.")
-print("Tables: users, trips, members, expenses, expense_splits")
+print("Tables: users, trips, trip_users, members, expenses, expense_splits")

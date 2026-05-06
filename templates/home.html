@@ -62,10 +62,19 @@
             <span class="trip-badge badge-done">✓ Done</span>
             <a href="/results/{{ trip.id }}" class="btn-ghost trip-btn">View Results</a>
           {% endif %}
+          {% if trip.created_by == user_id %}
           <button class="trip-delete-btn"
                   data-id="{{ trip.id }}"
                   data-name="{{ trip.trip_name }}"
+                  data-action="delete"
                   title="Delete trip">🗑</button>
+          {% else %}
+          <button class="trip-delete-btn trip-leave-btn"
+                  data-id="{{ trip.id }}"
+                  data-name="{{ trip.trip_name }}"
+                  data-action="leave"
+                  title="Leave trip">← Leave</button>
+          {% endif %}
         </div>
       </div>
       {% endfor %}
@@ -105,11 +114,11 @@
     </div>
   </div>
 
-  <!-- Step 3: Member Names -->
+  <!-- Step 3: Member Details (alias + optional username) -->
   <div id="memberNamesBox" class="modal hidden">
     <div class="modal-step">STEP 3 OF 3</div>
-    <h2 class="modal-title">Enter member names</h2>
-    <p class="modal-hint">One name per person.</p>
+    <h2 class="modal-title">Add members</h2>
+    <p class="modal-hint">Alias is required. Username links them to their account.</p>
     <form id="memberForm" class="name-form"></form>
     <div class="modal-actions">
       <button id="prevBtn" class="btn-ghost">← Back</button>
@@ -121,6 +130,7 @@
   <div class="modal-backdrop hidden" id="modalBackdrop"></div>
 
   <script>
+    const currentUserId = {{ user_id }};
     const newTripBtn     = document.getElementById("newTripBtn");
     const tripBox        = document.getElementById("tripBox");
     const cancelBtn      = document.getElementById("cancelBtn");
@@ -170,17 +180,29 @@
 
       memberForm.innerHTML = "";
       for (let i = 1; i <= count; i++) {
-        const wrap  = document.createElement("div");
-        wrap.className = "name-row";
-        const label = document.createElement("span");
-        label.className = "name-num";
-        label.textContent = i;
-        const input = document.createElement("input");
-        input.type = "text";
-        input.placeholder = `Member ${i}`;
-        input.classList.add("field", "member-input");
-        wrap.appendChild(label);
-        wrap.appendChild(input);
+        const wrap = document.createElement("div");
+        wrap.className = "member-entry";
+
+        // Row number badge
+        const num = document.createElement("span");
+        num.className   = "name-num";
+        num.textContent = i;
+
+        // Alias field (required)
+        const aliasInput = document.createElement("input");
+        aliasInput.type        = "text";
+        aliasInput.placeholder = `Alias (required)`;
+        aliasInput.classList.add("field", "member-alias-input");
+
+        // Username field (optional)
+        const userInput = document.createElement("input");
+        userInput.type        = "text";
+        userInput.placeholder = `Username (optional)`;
+        userInput.classList.add("field", "member-username-input");
+
+        wrap.appendChild(num);
+        wrap.appendChild(aliasInput);
+        wrap.appendChild(userInput);
         memberForm.appendChild(wrap);
       }
       hideModal(memberCountBox);
@@ -198,17 +220,40 @@
     });
 
     saveMembersBtn.addEventListener("click", async () => {
-      const inputs  = document.querySelectorAll(".member-input");
-      const members = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
-      if (members.length < count) { alert("Please fill in all member names."); return; }
-      const lower = members.map(n => n.toLowerCase());
-      if (new Set(lower).size !== lower.length) { alert("Names must be unique."); return; }
+      const aliasInputs = document.querySelectorAll(".member-alias-input");
+      const userInputs  = document.querySelectorAll(".member-username-input");
+
+      // Validate: every alias must be filled
+      const aliases = Array.from(aliasInputs).map(i => i.value.trim().toLowerCase());
+      if (aliases.some(a => a === '')) {
+        alert("Every member must have an alias."); return;
+      }
+      if (aliases.length < count) {
+        alert("Please fill in all member aliases."); return;
+      }
+
+      // Validate: no duplicate aliases
+      if (new Set(aliases).size !== aliases.length) {
+        alert("Alias names must be unique."); return;
+      }
+
+      // Validate: no duplicate usernames among those provided
+      const usernames = Array.from(userInputs)
+        .map(i => i.value.trim().toLowerCase())
+        .filter(u => u !== '');
+      if (new Set(usernames).size !== usernames.length) {
+        alert("Duplicate usernames are not allowed."); return;
+      }
+
+      // Build members array
+      const members = Array.from(aliasInputs).map((inp, idx) => ({
+        alias:    inp.value.trim().toLowerCase(),
+        username: userInputs[idx].value.trim().toLowerCase()
+      }));
 
       saveMembersBtn.textContent = "Creating…";
       saveMembersBtn.disabled    = true;
 
-      // Single atomic call — trip + members created together.
-      // If user cancelled before this, nothing was written to DB.
       const res  = await fetch("/create_trip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -270,22 +315,27 @@
     const homeDelBtn   = document.getElementById('homeDeleteBtn');
     const homeCancelBtn = document.getElementById('homeCancelBtn');
 
-    function showHomeConfirm(tripId, tripName, rowEl) {
-      homeMsg.textContent    = `Delete "${tripName}" and all its expenses? This cannot be undone.`;
+    function showHomeConfirm(tripId, tripName, action, rowEl) {
+      const isDelete = action === 'delete';
+      homeMsg.textContent = isDelete
+        ? `Delete "${tripName}" and all its expenses? This cannot be undone.`
+        : `Leave "${tripName}"? You will lose access to this trip.`;
+      homeDelBtn.textContent = isDelete ? 'Delete' : 'Leave';
       homeModal.classList.remove('hidden');
       homeBdrop.classList.remove('hidden');
       homeDelBtn.disabled    = false;
 
       homeDelBtn.onclick = async () => {
-        homeDelBtn.disabled = true;   // prevent double-click
-        const res    = await fetch(`/delete_trip/${tripId}`, { method: 'POST' });
+        homeDelBtn.disabled = true;
+        const url    = isDelete ? `/delete_trip/${tripId}` : `/leave_trip/${tripId}`;
+        const res    = await fetch(url, { method: 'POST' });
         const result = await res.json();
         if (result.status === 'success') {
           rowEl.style.transition = 'opacity 0.3s';
           rowEl.style.opacity    = '0';
           setTimeout(() => rowEl.remove(), 300);
         } else {
-          alert('⚠ ' + (result.message || 'Failed to delete trip.'));
+          alert('⚠ ' + (result.message || 'Action failed.'));
         }
         hideHomeConfirm();
       };
@@ -302,13 +352,14 @@
       if (e.key === 'Escape') hideHomeConfirm();
     });
 
-    // Wire all delete buttons
+    // Wire all delete/leave buttons
     document.querySelectorAll('.trip-delete-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const row  = btn.closest('.trip-row');
-        const id   = btn.dataset.id;
-        const name = btn.dataset.name;
-        showHomeConfirm(id, name, row);
+        const row    = btn.closest('.trip-row');
+        const id     = btn.dataset.id;
+        const name   = btn.dataset.name;
+        const action = btn.dataset.action; // 'delete' or 'leave'
+        showHomeConfirm(id, name, action, row);
       });
     });
   </script>

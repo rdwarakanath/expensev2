@@ -32,6 +32,50 @@ def login_required(f):
 
 
 # =========================================================
+# ── ACCESS CONTROL HELPER ────────────────────────────────
+# =========================================================
+
+def check_trip_access(trip_id, user_id, conn=None):
+    """
+    Returns trip row if user has access via trip_users table.
+    Returns None if no access or trip doesn't exist.
+    Accepts optional existing connection to avoid double-open.
+    """
+    close_after = False
+    if conn is None:
+        conn = get_db()
+        close_after = True
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT t.id, t.trip_name, t.is_active, t.created_by
+        FROM   trips      t
+        JOIN   trip_users tu ON tu.trip_id = t.id
+        WHERE  t.id = ? AND tu.user_id = ?
+    """, (trip_id, user_id))
+    row = cur.fetchone()
+    if close_after:
+        conn.close()
+    return row
+
+
+def is_trip_creator(trip_id, user_id, conn=None):
+    """Returns True if user is the creator of the trip."""
+    close_after = False
+    if conn is None:
+        conn = get_db()
+        close_after = True
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id FROM trips WHERE id = ? AND created_by = ?",
+        (trip_id, user_id)
+    )
+    row = cur.fetchone()
+    if close_after:
+        conn.close()
+    return row is not None
+
+
+# =========================================================
 # ── HELPER FUNCTIONS (UNCHANGED FROM PREVIOUS VERSION) ────
 # =========================================================
 
@@ -365,23 +409,25 @@ def logout():
 @login_required
 def home():
     """
-    Shows the user's trip history and the new trip creation flow.
-    Trips are fetched fresh from DB filtered by user_id.
+    Shows all trips the user has access to via trip_users.
+    Also passes created_by so UI knows who can delete vs leave.
     """
     user_id = session['user_id']
     conn    = get_db()
     cur     = conn.cursor()
     cur.execute("""
-        SELECT id, trip_name, is_active, created_at
-        FROM   trips
-        WHERE  user_id = ?
-        ORDER  BY created_at DESC
+        SELECT t.id, t.trip_name, t.is_active, t.created_at, t.created_by
+        FROM   trips      t
+        JOIN   trip_users tu ON tu.trip_id = t.id
+        WHERE  tu.user_id = ?
+        ORDER  BY t.created_at DESC
     """, (user_id,))
     trips = [dict(r) for r in cur.fetchall()]
     conn.close()
 
     return render_template('home.html',
                            username=session['username'],
+                           user_id=user_id,
                            trips=trips)
 
 
@@ -393,15 +439,19 @@ def home():
 @login_required
 def create_trip_route():
     """
-    Atomic trip creation — receives trip name + members together
-    and writes both in a single DB transaction.
-
-    This replaces the old two-step save_trip + save_members flow
-    which left orphan trips in the DB if the user cancelled midway.
+    Atomic trip creation with multi-user support.
+    Receives: tripName, members = [{alias, username}]
+    - Creates trip with created_by = current user
+    - Inserts creator into trip_users
+    - For each member: looks up username in users table
+        - Found → sets members.user_id, inserts into trip_users
+        - Not found → alias only, no access granted
+    - Validates: alias required, no duplicate aliases,
+                 no duplicate usernames in same trip
     """
     data      = request.get_json() or {}
     trip_name = data.get('tripName', '').strip()
-    members   = data.get('members', [])
+    members   = data.get('members', [])   # [{alias, username}]
     user_id   = session['user_id']
 
     if not trip_name:
@@ -409,21 +459,57 @@ def create_trip_route():
     if not members or len(members) < 1:
         return jsonify({"error": "At least one member is required"}), 400
 
+    # Validate all aliases present and unique (case-insensitive)
+    aliases = [m.get('alias', '').strip().lower() for m in members]
+    if any(a == '' for a in aliases):
+        return jsonify({"error": "All members must have an alias"}), 400
+    if len(set(aliases)) != len(aliases):
+        return jsonify({"error": "Duplicate alias names are not allowed"}), 400
+
+    # Validate usernames unique among those provided (ignore blank ones)
+    usernames_provided = [m.get('username', '').strip().lower()
+                          for m in members if m.get('username', '').strip()]
+    if len(set(usernames_provided)) != len(usernames_provided):
+        return jsonify({"error": "Duplicate usernames are not allowed"}), 400
+
     conn = get_db()
     cur  = conn.cursor()
     try:
-        # Insert trip
+        # 1. Insert trip
         cur.execute(
-            "INSERT INTO trips (trip_name, user_id, is_active) VALUES (?, ?, 1)",
+            "INSERT INTO trips (trip_name, created_by, is_active) VALUES (?, ?, 1)",
             (trip_name, user_id)
         )
         trip_id = cur.lastrowid
 
-        # Insert all members in same transaction
+        # 2. Insert creator into trip_users
+        cur.execute(
+            "INSERT OR IGNORE INTO trip_users (trip_id, user_id) VALUES (?, ?)",
+            (trip_id, user_id)
+        )
+
+        # 3. Insert each member
         for m in members:
+            alias    = m.get('alias', '').strip().lower()
+            uname    = m.get('username', '').strip().lower()
+            member_uid = None
+
+            if uname:
+                # Look up username in users table
+                cur.execute("SELECT id FROM users WHERE LOWER(username) = ?", (uname,))
+                urow = cur.fetchone()
+                if urow:
+                    member_uid = urow['id']
+                    # Grant trip access to this user
+                    cur.execute(
+                        "INSERT OR IGNORE INTO trip_users (trip_id, user_id) VALUES (?, ?)",
+                        (trip_id, member_uid)
+                    )
+                # If username not found → alias only, no access (no error, just skip)
+
             cur.execute(
-                "INSERT INTO members (trip_id, name) VALUES (?, ?)",
-                (trip_id, m.strip())
+                "INSERT INTO members (trip_id, name, user_id) VALUES (?, ?, ?)",
+                (trip_id, alias, member_uid)
             )
 
         conn.commit()
@@ -458,24 +544,15 @@ def save_members():
 @login_required
 def dashboard(trip_id):
     user_id = session['user_id']
-    conn    = get_db()
-    cur     = conn.cursor()
-
-    # Ownership check: trip must belong to this user
-    cur.execute(
-        "SELECT trip_name, is_active FROM trips WHERE id = ? AND user_id = ?",
-        (trip_id, user_id)
-    )
-    trip = cur.fetchone()
+    trip    = check_trip_access(trip_id, user_id)
     if not trip:
-        conn.close()
-        return "Trip not found.", 404
+        return "Trip not found or access denied.", 404
 
-    # If trip is finished, send straight to results
     if not trip['is_active']:
-        conn.close()
         return redirect(url_for('results', trip_id=trip_id))
 
+    conn = get_db()
+    cur  = conn.cursor()
     cur.execute("SELECT name FROM members WHERE trip_id = ?", (trip_id,))
     members = [r["name"] for r in cur.fetchall()]
     conn.close()
@@ -499,19 +576,9 @@ def add_expense(trip_id):
     if not all(k in data for k in ["reason", "amount", "members", "shares", "whopaid"]):
         return jsonify({"status": "error", "message": "Missing fields"}), 400
 
-    conn = get_db()
-    cur  = conn.cursor()
-
-    # Ownership + is_active check
-    cur.execute(
-        "SELECT is_active FROM trips WHERE id = ? AND user_id = ?",
-        (trip_id, user_id)
-    )
-    trip = cur.fetchone()
-    conn.close()
-
+    trip = check_trip_access(trip_id, user_id)
     if not trip:
-        return jsonify({"status": "error", "message": "Trip not found"}), 404
+        return jsonify({"status": "error", "message": "Trip not found or access denied"}), 404
     if not trip['is_active']:
         return jsonify({"status": "error", "message": "This trip is finished."}), 403
 
@@ -527,17 +594,9 @@ def add_expense(trip_id):
 @login_required
 def get_data(trip_id):
     user_id = session['user_id']
-    conn    = get_db()
-    cur     = conn.cursor()
-
-    cur.execute(
-        "SELECT id FROM trips WHERE id = ? AND user_id = ?",
-        (trip_id, user_id)
-    )
-    if not cur.fetchone():
-        conn.close()
+    trip    = check_trip_access(trip_id, user_id)
+    if not trip:
         return jsonify([])
-    conn.close()
 
     data = fetch_total_spent_data(trip_id)   # UNCHANGED helper
     return jsonify(data)
@@ -554,12 +613,8 @@ def get_expenses(trip_id):
     conn    = get_db()
     cur     = conn.cursor()
 
-    # Ownership check
-    cur.execute(
-        "SELECT id FROM trips WHERE id = ? AND user_id = ?",
-        (trip_id, user_id)
-    )
-    if not cur.fetchone():
+    # Access check via trip_users
+    if not check_trip_access(trip_id, user_id):
         conn.close()
         return jsonify([])
 
@@ -604,9 +659,14 @@ def finish_trip(trip_id):
     conn    = get_db()
     cur     = conn.cursor()
 
+    # Only creator can finish a trip
+    if not is_trip_creator(trip_id, user_id):
+        conn.close()
+        return jsonify({"status": "error", "message": "Only the trip creator can finish this trip"}), 403
+
     cur.execute(
-        "UPDATE trips SET is_active = 0 WHERE id = ? AND user_id = ?",
-        (trip_id, user_id)
+        "UPDATE trips SET is_active = 0 WHERE id = ?",
+        (trip_id,)
     )
     conn.commit()
     conn.close()
@@ -622,19 +682,9 @@ def finish_trip(trip_id):
 @login_required
 def results(trip_id):
     user_id = session['user_id']
-    conn    = get_db()
-    cur     = conn.cursor()
-
-    # Ownership check
-    cur.execute(
-        "SELECT trip_name FROM trips WHERE id = ? AND user_id = ?",
-        (trip_id, user_id)
-    )
-    trip = cur.fetchone()
-    conn.close()
-
+    trip = check_trip_access(trip_id, user_id)
     if not trip:
-        return "Trip not found.", 404
+        return "Trip not found or access denied.", 404
 
     payday, simplified, totspent, transactions = calculate_results(trip_id)
 
@@ -663,40 +713,75 @@ def results(trip_id):
 @login_required
 def delete_trip(trip_id):
     """
-    Delete a trip and all its related data.
-    Manual cascade order: expense_splits → expenses → members → trip
-    Ownership verified before any deletion.
+    Full trip delete — only the creator can do this.
+    Non-creators should use /leave_trip instead.
+    Manual cascade: expense_splits → expenses → members → trip_users → trip
     """
     user_id = session['user_id']
-    conn    = get_db()
-    cur     = conn.cursor()
 
-    # Ownership check
-    cur.execute(
-        "SELECT id FROM trips WHERE id = ? AND user_id = ?",
-        (trip_id, user_id)
-    )
-    if not cur.fetchone():
-        conn.close()
-        return jsonify({"status": "error", "message": "Trip not found or unauthorized"}), 404
+    if not is_trip_creator(trip_id, user_id):
+        return jsonify({"status": "error", "message": "Only the trip creator can delete this trip"}), 403
 
+    conn = get_db()
+    cur  = conn.cursor()
     try:
-        # Step 1: delete expense_splits for all expenses of this trip
         cur.execute("""
             DELETE FROM expense_splits
-            WHERE expense_id IN (
-                SELECT id FROM expenses WHERE trip_id = ?
-            )
+            WHERE expense_id IN (SELECT id FROM expenses WHERE trip_id = ?)
         """, (trip_id,))
-
-        # Step 2: delete expenses
         cur.execute("DELETE FROM expenses WHERE trip_id = ?", (trip_id,))
-
-        # Step 3: delete members
         cur.execute("DELETE FROM members WHERE trip_id = ?", (trip_id,))
-
-        # Step 4: delete trip
+        cur.execute("DELETE FROM trip_users WHERE trip_id = ?", (trip_id,))
         cur.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        conn.close()
+
+    return jsonify({"status": "success"})
+
+
+@app.route('/leave_trip/<int:trip_id>', methods=['POST'])
+@login_required
+def leave_trip(trip_id):
+    """
+    Non-creator leaves a trip — removes only their trip_users row.
+    If they were the last user, auto-deletes the entire trip.
+    Creator cannot leave — they must delete instead.
+    """
+    user_id = session['user_id']
+
+    if not check_trip_access(trip_id, user_id):
+        return jsonify({"status": "error", "message": "Trip not found or access denied"}), 404
+
+    if is_trip_creator(trip_id, user_id):
+        return jsonify({"status": "error",
+                        "message": "You created this trip. Use Delete instead of Leave."}), 403
+
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            "DELETE FROM trip_users WHERE trip_id = ? AND user_id = ?",
+            (trip_id, user_id)
+        )
+
+        # Check if anyone still has access
+        cur.execute("SELECT COUNT(*) AS cnt FROM trip_users WHERE trip_id = ?", (trip_id,))
+        remaining = cur.fetchone()['cnt']
+
+        if remaining == 0:
+            # Last user left — auto delete everything
+            cur.execute("""
+                DELETE FROM expense_splits
+                WHERE expense_id IN (SELECT id FROM expenses WHERE trip_id = ?)
+            """, (trip_id,))
+            cur.execute("DELETE FROM expenses WHERE trip_id = ?", (trip_id,))
+            cur.execute("DELETE FROM members WHERE trip_id = ?", (trip_id,))
+            cur.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
 
         conn.commit()
     except Exception as e:
@@ -721,12 +806,13 @@ def delete_expense(expense_id):
     conn    = get_db()
     cur     = conn.cursor()
 
-    # Verify expense exists and belongs to a trip owned by this user
+    # Verify expense exists and user has access to its trip via trip_users
     cur.execute("""
         SELECT e.id, t.is_active
-        FROM   expenses e
-        JOIN   trips    t ON e.trip_id = t.id
-        WHERE  e.id = ? AND t.user_id = ?
+        FROM   expenses   e
+        JOIN   trips      t  ON e.trip_id  = t.id
+        JOIN   trip_users tu ON tu.trip_id = t.id
+        WHERE  e.id = ? AND tu.user_id = ?
     """, (expense_id, user_id))
     row = cur.fetchone()
 
