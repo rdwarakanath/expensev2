@@ -1144,7 +1144,7 @@ body {
 .member-entry {
   display: grid;
   grid-template-columns: 28px 1fr 1fr;
-  align-items: center;
+  align-items: start;   /* start so dropdown doesn't shift layout */
   gap: 8px;
   margin-bottom: 8px;
 }
@@ -1169,4 +1169,52 @@ body {
   background: rgba(148,163,184,0.1);
   border-color: var(--text-muted);
   color: var(--text-primary);
+}
+
+/* ── Username dropdown ───────────────────────────────────────────────────── */
+.username-wrap {
+  position: relative;
+  flex: 1;
+}
+.username-wrap .field {
+  width: 100%;
+}
+.username-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: rgba(20, 24, 36, 0.98);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 999;
+  overflow: hidden;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.username-dropdown-item {
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border-bottom: 1px solid var(--border);
+}
+.username-dropdown-item:last-child {
+  border-bottom: none;
+}
+.username-dropdown-item:hover {
+  background: var(--amber-dim);
+  color: var(--amber);
+}
+
+/* ── Creator locked username field ───────────────────────────────────────── */
+.creator-username-locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: rgba(255,255,255,0.03) !important;
+  border-color: rgba(255,255,255,0.06) !important;
+  color: var(--amber) !important;
+  font-weight: 600;
 }

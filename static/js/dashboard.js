@@ -255,13 +255,15 @@ function resetExpenseForm() {
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase(); }
 function roundTo(num, decimals) { return Math.round(num * 10 ** decimals) / 10 ** decimals; }
 
-// ── Finish button (ORIGINAL — unchanged) ─────────────────────────────────
-finishBtn.addEventListener("click", async () => {
-  if (confirm("Are you sure you want to finish the trip?")) {
-    await fetch(`/finish_trip/${tripId}`, { method: "POST" });
-    window.location.href = `/results/${tripId}`;
-  }
-});
+// ── Finish button — only rendered for creators, guard null check ──────────
+if (finishBtn) {
+  finishBtn.addEventListener("click", async () => {
+    if (confirm("Are you sure you want to finish the trip?")) {
+      await fetch(`/finish_trip/${tripId}`, { method: "POST" });
+      window.location.href = `/results/${tripId}`;
+    }
+  });
+}
 
 // ── Bill synopsis (ORIGINAL — unchanged) ─────────────────────────────────
 billBtn.addEventListener("click", async () => {

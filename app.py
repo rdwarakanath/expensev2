@@ -428,12 +428,36 @@ def home():
     return render_template('home.html',
                            username=session['username'],
                            user_id=user_id,
+                           creator_username=session['username'],
                            trips=trips)
 
 
 # =========================================================
 # ── TRIP CREATION ROUTES ──────────────────────────────────
 # =========================================================
+
+
+@app.route('/search_users')
+@login_required
+def search_users():
+    """
+    Returns usernames matching the query string (for dropdown suggestions).
+    Excludes the current user since they are already the creator.
+    """
+    q       = request.args.get('q', '').strip().lower()
+    user_id = session['user_id']
+    if len(q) < 1:
+        return jsonify([])
+    conn = get_db()
+    cur  = conn.cursor()
+    cur.execute("""
+        SELECT username FROM users
+        WHERE  LOWER(username) LIKE ?
+        LIMIT  8
+    """, (f'%{q}%',))
+    results = [r['username'] for r in cur.fetchall()]
+    conn.close()
+    return jsonify(results)
 
 @app.route('/create_trip', methods=['POST'])
 @login_required
@@ -557,10 +581,12 @@ def dashboard(trip_id):
     members = [r["name"] for r in cur.fetchall()]
     conn.close()
 
+    is_creator = is_trip_creator(trip_id, user_id)
     return render_template('dashboard.html',
                            trip_name=trip['trip_name'],
                            trip_id=trip_id,
-                           members=members)
+                           members=members,
+                           is_creator=is_creator)
 
 
 # =========================================================

@@ -11,8 +11,9 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <!-- members array and trip_id used by dashboard.js -->
   <script>
-    const members = {{ members | tojson }};
-    const tripId  = {{ trip_id }};
+    const members   = {{ members | tojson }};
+    const tripId    = {{ trip_id }};
+    const isCreator = {{ 'true' if is_creator else 'false' }};
   </script>
 </head>
 <body class="dashboard-body">
@@ -45,7 +46,9 @@
 
     <div class="topbar-right">
       <button class="btn-add" id="addExpenseBtn">+ Add Expense</button>
+      {% if is_creator %}
       <button class="btn-finish" id="FinishBtn">Finish Trip</button>
+      {% endif %}
     </div>
   </nav>
 

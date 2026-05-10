@@ -102,12 +102,12 @@
     </div>
   </div>
 
-  <!-- Step 2: Member Count -->
+  <!-- Step 2: Member Count (additional members only — creator is always row 1) -->
   <div id="memberCountBox" class="modal hidden">
     <div class="modal-step">STEP 2 OF 3</div>
-    <h2 class="modal-title">How many people?</h2>
-    <p class="modal-hint">Including yourself.</p>
-    <input type="number" id="memberCountInput" class="field" placeholder="e.g. 4" min="1" max="20" />
+    <h2 class="modal-title">How many others?</h2>
+    <p class="modal-hint">How many additional members besides yourself? Enter 0 for solo trip.</p>
+    <input type="number" id="memberCountInput" class="field" placeholder="e.g. 3" min="0" max="19" />
     <div class="modal-actions">
       <button id="backBtn" class="btn-ghost">← Back</button>
       <button id="nextBtn" class="btn-primary">Continue →</button>
@@ -130,7 +130,8 @@
   <div class="modal-backdrop hidden" id="modalBackdrop"></div>
 
   <script>
-    const currentUserId = {{ user_id }};
+    const currentUserId      = {{ user_id }};
+    const creatorUsername     = {{ creator_username | tojson }};
     const newTripBtn     = document.getElementById("newTripBtn");
     const tripBox        = document.getElementById("tripBox");
     const cancelBtn      = document.getElementById("cancelBtn");
@@ -174,35 +175,132 @@
       setTimeout(() => showModal(memberCountBox), 120);
     });
 
+    // ── Dropdown helpers ─────────────────────────────────────────────────────
+    let activeDropdown = null;
+
+    function closeAllDropdowns() {
+      document.querySelectorAll('.username-dropdown').forEach(d => d.remove());
+      activeDropdown = null;
+    }
+
+    function attachUsernameDropdown(userInput) {
+      let debounceTimer;
+
+      userInput.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        const q = userInput.value.trim();
+
+        closeAllDropdowns();
+        if (q.length < 1) return;
+
+        debounceTimer = setTimeout(async () => {
+          const res  = await fetch(`/search_users?q=${encodeURIComponent(q)}`);
+          const list = await res.json();
+
+          closeAllDropdowns();
+          if (list.length === 0) return;
+
+          const dropdown = document.createElement("div");
+          dropdown.className = "username-dropdown";
+
+          list.forEach(username => {
+            const item = document.createElement("div");
+            item.className   = "username-dropdown-item";
+            item.textContent = username;
+            item.addEventListener("mousedown", (e) => {
+              e.preventDefault(); // prevent blur before click
+              userInput.value = username;
+              userInput.dataset.validated = "true";
+              closeAllDropdowns();
+            });
+            dropdown.appendChild(item);
+          });
+
+          // Position below the input
+          userInput.parentNode.style.position = "relative";
+          userInput.parentNode.appendChild(dropdown);
+          activeDropdown = dropdown;
+        }, 250);
+      });
+
+      // Mark as unvalidated when user types freely
+      userInput.addEventListener("keydown", () => {
+        userInput.dataset.validated = "";
+      });
+
+      // Close dropdown on blur, but allow mousedown on item first
+      userInput.addEventListener("blur", () => {
+        setTimeout(closeAllDropdowns, 150);
+      });
+    }
+
     nextBtn.addEventListener("click", () => {
-      count = Number(document.getElementById("memberCountInput").value);
-      if (!count || count <= 0) { shakeField("memberCountInput"); return; }
+      const rawCount = document.getElementById("memberCountInput").value;
+      count = Number(rawCount);
+      // Allow 0 for solo trip (creator only)
+      if (rawCount === '' || count < 0) { shakeField("memberCountInput"); return; }
 
       memberForm.innerHTML = "";
+
+      // ── Row 1: Creator — username locked, only alias editable ────────────
+      const creatorWrap = document.createElement("div");
+      creatorWrap.className = "member-entry";
+
+      const creatorNum = document.createElement("span");
+      creatorNum.className   = "name-num";
+      creatorNum.textContent = "You";
+
+      const creatorAlias = document.createElement("input");
+      creatorAlias.type        = "text";
+      creatorAlias.placeholder = "Your alias (required)";
+      creatorAlias.classList.add("field", "member-alias-input");
+
+      // Locked username field — shows creator's username, cannot be changed
+      const creatorUserWrap = document.createElement("div");
+      creatorUserWrap.className = "username-wrap";
+      const creatorUserInput = document.createElement("input");
+      creatorUserInput.type                = "text";
+      creatorUserInput.value               = creatorUsername;
+      creatorUserInput.readOnly            = true;
+      creatorUserInput.dataset.validated   = "true";  // always valid
+      creatorUserInput.classList.add("field", "member-username-input", "creator-username-locked");
+      creatorUserWrap.appendChild(creatorUserInput);
+
+      creatorWrap.appendChild(creatorNum);
+      creatorWrap.appendChild(creatorAlias);
+      creatorWrap.appendChild(creatorUserWrap);
+      memberForm.appendChild(creatorWrap);
+
+      // ── Rows 2+: Additional members ───────────────────────────────────────
       for (let i = 1; i <= count; i++) {
         const wrap = document.createElement("div");
         wrap.className = "member-entry";
 
-        // Row number badge
         const num = document.createElement("span");
         num.className   = "name-num";
-        num.textContent = i;
+        num.textContent = i + 1;
 
-        // Alias field (required)
         const aliasInput = document.createElement("input");
         aliasInput.type        = "text";
         aliasInput.placeholder = `Alias (required)`;
         aliasInput.classList.add("field", "member-alias-input");
 
-        // Username field (optional)
+        const userWrap = document.createElement("div");
+        userWrap.className = "username-wrap";
+
         const userInput = document.createElement("input");
-        userInput.type        = "text";
-        userInput.placeholder = `Username (optional)`;
+        userInput.type              = "text";
+        userInput.placeholder       = `Username (optional)`;
+        userInput.autocomplete      = "off";
+        userInput.dataset.validated = "";
         userInput.classList.add("field", "member-username-input");
 
+        attachUsernameDropdown(userInput);
+
+        userWrap.appendChild(userInput);
         wrap.appendChild(num);
         wrap.appendChild(aliasInput);
-        wrap.appendChild(userInput);
+        wrap.appendChild(userWrap);
         memberForm.appendChild(wrap);
       }
       hideModal(memberCountBox);
@@ -223,13 +321,10 @@
       const aliasInputs = document.querySelectorAll(".member-alias-input");
       const userInputs  = document.querySelectorAll(".member-username-input");
 
-      // Validate: every alias must be filled
+      // Validate: every alias must be filled (including creator row)
       const aliases = Array.from(aliasInputs).map(i => i.value.trim().toLowerCase());
       if (aliases.some(a => a === '')) {
-        alert("Every member must have an alias."); return;
-      }
-      if (aliases.length < count) {
-        alert("Please fill in all member aliases."); return;
+        alert("Every member must have an alias — including yours (row 1)."); return;
       }
 
       // Validate: no duplicate aliases
@@ -245,7 +340,25 @@
         alert("Duplicate usernames are not allowed."); return;
       }
 
-      // Build members array
+      // Validate: non-creator username fields — if filled and not validated
+      // Skip index 0 (creator row) — always pre-validated
+      for (let i = 1; i < userInputs.length; i++) {
+        const val       = userInputs[i].value.trim();
+        const validated = userInputs[i].dataset.validated;
+        if (val !== '' && validated !== 'true') {
+          const checkRes  = await fetch(`/search_users?q=${encodeURIComponent(val)}`);
+          const checkList = await checkRes.json();
+          const exact     = checkList.map(u => u.toLowerCase());
+          if (!exact.includes(val.toLowerCase())) {
+            alert(`User "${val}" does not exist. Please select from the dropdown or leave blank.`);
+            userInputs[i].focus();
+            return;
+          }
+          userInputs[i].dataset.validated = 'true';
+        }
+      }
+
+      // Build members array — includes creator as first element
       const members = Array.from(aliasInputs).map((inp, idx) => ({
         alias:    inp.value.trim().toLowerCase(),
         username: userInputs[idx].value.trim().toLowerCase()
