@@ -69,16 +69,24 @@ CREATE TABLE IF NOT EXISTS expenses (
 )
 """)
 
-# ── Table: trip_users (NEW — access control) ─────────────────────────────────
+# ── Table: trip_users (invite + access control) ──────────────────────────────
+# status: 'accepted' | 'pending' | 'rejected'
 cur.execute("""
 CREATE TABLE IF NOT EXISTS trip_users (
     trip_id  INTEGER NOT NULL,
     user_id  INTEGER NOT NULL,
+    status   TEXT    NOT NULL DEFAULT 'accepted',
     PRIMARY KEY (trip_id, user_id),
     FOREIGN KEY (trip_id) REFERENCES trips(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
 )
 """)
+
+# ── Patch trip_users — add status column if missing (existing rows = accepted) ─
+tu_cols = [row[1] for row in cur.execute("PRAGMA table_info(trip_users)").fetchall()]
+if "status" not in tu_cols:
+    cur.execute("ALTER TABLE trip_users ADD COLUMN status TEXT NOT NULL DEFAULT 'accepted'")
+    print("Patched trip_users: added status column (existing rows default to accepted)")
 
 # ── Patch members table — add user_id column (nullable) ──────────────────────
 member_cols = [row[1] for row in cur.execute("PRAGMA table_info(members)").fetchall()]

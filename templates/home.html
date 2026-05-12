@@ -28,7 +28,8 @@
     </div>
   </nav>
 
-  <!-- Main content -->
+  <!-- Main content: two-column layout — trips left, invites panel right -->
+  <div class="home-layout">
   <div class="home-wrap">
 
     <!-- Header row -->
@@ -87,6 +88,47 @@
     {% endif %}
 
   </div><!-- /home-wrap -->
+
+  <!-- ── PENDING INVITES SIDE PANEL ── -->
+  <!-- Always rendered; hidden via CSS when empty so JS can still reference it -->
+  <div class="invites-panel" id="invitesPanel" {% if not pending_invites %}style="display:none"{% endif %}>
+    <div class="invites-panel-header">
+      <span class="section-divider-label">📬 Invites</span>
+      <span class="invite-count-badge">{{ pending_invites | length }}</span>
+    </div>
+    <div class="invites-scroll">
+      {% for invite in pending_invites %}
+      <div class="invite-card" id="invite-row-{{ invite.id }}">
+        <div class="invite-card-top">
+          <div class="trip-row-avatar invite-avatar">{{ invite.trip_name[0] | upper }}</div>
+          <div class="trip-row-info">
+            <span class="trip-row-name">{{ invite.trip_name }}</span>
+            <span class="trip-row-date">by <strong>{{ invite.invited_by }}</strong></span>
+          </div>
+        </div>
+        <!-- Inline alias input — shown when Accept is clicked -->
+        <div class="invite-alias-row hidden" id="alias-row-{{ invite.id }}">
+          <input type="text"
+                 class="field invite-alias-input"
+                 id="alias-input-{{ invite.id }}"
+                 placeholder="Your alias in this trip"
+                 autocomplete="off" />
+          <button class="btn-accept-invite confirm-accept-btn"
+                  data-id="{{ invite.id }}">✓ Join</button>
+        </div>
+        <div class="invite-actions" id="invite-actions-{{ invite.id }}">
+          <button class="btn-accept-invite show-alias-btn"
+                  data-id="{{ invite.id }}"
+                  data-name="{{ invite.trip_name }}">✓ Accept</button>
+          <button class="btn-reject-invite"
+                  data-id="{{ invite.id }}">✕ Reject</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  </div><!-- /home-layout -->
 
   <!-- ── NEW TRIP MODALS (same 3-step flow as before) ── -->
 
@@ -271,36 +313,92 @@
       creatorWrap.appendChild(creatorUserWrap);
       memberForm.appendChild(creatorWrap);
 
-      // ── Rows 2+: Additional members ───────────────────────────────────────
+      // ── Rows 2+: Additional members ─────────────────────────────────────────
+      // MUTUAL BLOCKING UX:
+      // - Type username → alias field dims + inline hint shown
+      // - Type alias first → username field dims + inline hint shown
+      // - Both empty → both active, no hints
       for (let i = 1; i <= count; i++) {
         const wrap = document.createElement("div");
-        wrap.className = "member-entry";
+        wrap.className = "member-entry-v2";
 
         const num = document.createElement("span");
         num.className   = "name-num";
         num.textContent = i + 1;
 
+        // ── Alias field + hint ──
+        const aliasGroup = document.createElement("div");
+        aliasGroup.className = "member-field-group";
+
         const aliasInput = document.createElement("input");
-        aliasInput.type        = "text";
-        aliasInput.placeholder = `Alias (required)`;
+        aliasInput.type         = "text";
+        aliasInput.placeholder  = "Alias (non-app member)";
+        aliasInput.autocomplete = "off";
         aliasInput.classList.add("field", "member-alias-input");
 
-        const userWrap = document.createElement("div");
-        userWrap.className = "username-wrap";
+        const aliasHint = document.createElement("p");
+        aliasHint.className = "field-inline-hint hint-info";
+
+        aliasGroup.appendChild(aliasInput);
+        aliasGroup.appendChild(aliasHint);
+
+        // ── Username field + hint ──
+        const userGroup = document.createElement("div");
+        userGroup.className = "member-field-group username-wrap";
 
         const userInput = document.createElement("input");
         userInput.type              = "text";
-        userInput.placeholder       = `Username (optional)`;
+        userInput.placeholder       = "Username (app user)";
         userInput.autocomplete      = "off";
         userInput.dataset.validated = "";
         userInput.classList.add("field", "member-username-input");
 
+        const userHint = document.createElement("p");
+        userHint.className = "field-inline-hint hint-warn";
+
+        userGroup.appendChild(userInput);
+        userGroup.appendChild(userHint);
+
+        // ── Mutual blocking ───────────────────────────────────────────────────
+        function updateMemberState() {
+          const hasAlias    = aliasInput.value.trim() !== '';
+          const hasUsername = userInput.value.trim()  !== '';
+
+          if (hasUsername) {
+            // Username filled → lock alias, show info hint
+            aliasInput.disabled  = true;
+            aliasInput.value     = '';
+            aliasInput.classList.add('field-locked');
+            aliasHint.textContent = "Will be set by member when they accept";
+            userHint.textContent  = "";
+          } else if (hasAlias) {
+            // Alias filled → lock username, show warn hint
+            userInput.disabled  = true;
+            userInput.value     = '';
+            userInput.dataset.validated = '';
+            userInput.classList.add('field-locked');
+            userHint.textContent  = "Non-app members cannot have a username";
+            aliasHint.textContent = "";
+            closeAllDropdowns();
+          } else {
+            // Both empty → unlock both, clear hints
+            aliasInput.disabled = false;
+            aliasInput.classList.remove('field-locked');
+            aliasHint.textContent = "";
+            userInput.disabled  = false;
+            userInput.classList.remove('field-locked');
+            userHint.textContent  = "";
+          }
+        }
+
+        aliasInput.addEventListener('input', updateMemberState);
+        userInput.addEventListener('input',  updateMemberState);
+
         attachUsernameDropdown(userInput);
 
-        userWrap.appendChild(userInput);
         wrap.appendChild(num);
-        wrap.appendChild(aliasInput);
-        wrap.appendChild(userWrap);
+        wrap.appendChild(aliasGroup);
+        wrap.appendChild(userGroup);
         memberForm.appendChild(wrap);
       }
       hideModal(memberCountBox);
@@ -321,14 +419,33 @@
       const aliasInputs = document.querySelectorAll(".member-alias-input");
       const userInputs  = document.querySelectorAll(".member-username-input");
 
-      // Validate: every alias must be filled (including creator row)
-      const aliases = Array.from(aliasInputs).map(i => i.value.trim().toLowerCase());
-      if (aliases.some(a => a === '')) {
-        alert("Every member must have an alias — including yours (row 1)."); return;
+      // Creator row (idx 0): alias required
+      const creatorAlias = aliasInputs[0].value.trim().toLowerCase();
+      if (!creatorAlias) {
+        alert("Please enter your alias (row 1)."); return;
+      }
+
+      // Additional rows: must have username OR alias (not both empty)
+      // Check active (non-disabled) fields only
+      for (let i = 1; i < userInputs.length; i++) {
+        const activeUsername = !userInputs[i].disabled  && userInputs[i].value.trim()  !== '';
+        const activeAlias    = !aliasInputs[i].disabled && aliasInputs[i].value.trim() !== '';
+        if (!activeUsername && !activeAlias) {
+          alert(`Row ${i + 1}: enter a username (app user) or an alias (non-app member).`);
+          return;
+        }
+      }
+
+      // Collect aliases that are actually active (not disabled/locked)
+      const allAliases = [creatorAlias];
+      for (let i = 1; i < aliasInputs.length; i++) {
+        if (!aliasInputs[i].disabled && aliasInputs[i].value.trim() !== '') {
+          allAliases.push(aliasInputs[i].value.trim().toLowerCase());
+        }
       }
 
       // Validate: no duplicate aliases
-      if (new Set(aliases).size !== aliases.length) {
+      if (new Set(allAliases).size !== allAliases.length) {
         alert("Alias names must be unique."); return;
       }
 
@@ -341,7 +458,6 @@
       }
 
       // Validate: non-creator username fields — if filled and not validated
-      // Skip index 0 (creator row) — always pre-validated
       for (let i = 1; i < userInputs.length; i++) {
         const val       = userInputs[i].value.trim();
         const validated = userInputs[i].dataset.validated;
@@ -350,7 +466,7 @@
           const checkList = await checkRes.json();
           const exact     = checkList.map(u => u.toLowerCase());
           if (!exact.includes(val.toLowerCase())) {
-            alert(`User "${val}" does not exist. Please select from the dropdown or leave blank.`);
+            alert(`User "${val}" does not exist. Select from the dropdown or leave blank.`);
             userInputs[i].focus();
             return;
           }
@@ -358,10 +474,15 @@
         }
       }
 
-      // Build members array — includes creator as first element
-      const members = Array.from(aliasInputs).map((inp, idx) => ({
-        alias:    inp.value.trim().toLowerCase(),
-        username: userInputs[idx].value.trim().toLowerCase()
+      // Build members array
+      // Creator: alias + username (is_creator = true)
+      // Username-linked: username only, alias empty (they choose on accept)
+      // Alias-only: alias only, username empty
+      // Use .disabled to detect locked fields — disabled = not the active field
+      const members = Array.from(userInputs).map((uInp, idx) => ({
+        alias:      aliasInputs[idx].disabled ? '' : aliasInputs[idx].value.trim().toLowerCase(),
+        username:   uInp.disabled             ? '' : uInp.value.trim().toLowerCase(),
+        is_creator: idx === 0
       }));
 
       saveMembersBtn.textContent = "Creating…";
@@ -473,6 +594,76 @@
         const name   = btn.dataset.name;
         const action = btn.dataset.action; // 'delete' or 'leave'
         showHomeConfirm(id, name, action, row);
+      });
+    });
+  </script>
+
+  <!-- ── INVITE ACCEPT / REJECT JS ── -->
+  <script>
+    // ── Show alias input inline, hide the Accept/Reject buttons ──────────
+    document.querySelectorAll('.show-alias-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id      = btn.dataset.id;
+        const actions = document.getElementById(`invite-actions-${id}`);
+        const aliasRow = document.getElementById(`alias-row-${id}`);
+        actions.classList.add('hidden');
+        aliasRow.classList.remove('hidden');
+        document.getElementById(`alias-input-${id}`).focus();
+      });
+    });
+
+    // ── Confirm join with alias ───────────────────────────────────────────
+    document.querySelectorAll('.confirm-accept-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id    = btn.dataset.id;
+        const input = document.getElementById(`alias-input-${id}`);
+        const alias = input.value.trim().toLowerCase();
+
+        if (!alias) { input.focus(); return; }
+
+        btn.disabled    = true;
+        btn.textContent = '…';
+
+        const res    = await fetch(`/accept_invite/${id}`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ alias })
+        });
+        const result = await res.json();
+
+        if (result.status === 'success') {
+          window.location.reload();
+        } else {
+          alert('⚠ ' + (result.message || 'Failed to accept invite.'));
+          btn.disabled    = false;
+          btn.textContent = '✓ Join';
+        }
+      });
+    });
+
+    // ── Reject invite ─────────────────────────────────────────────────────
+    document.querySelectorAll('.btn-reject-invite').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id  = btn.dataset.id;
+        const row = document.getElementById(`invite-row-${id}`);
+        if (!confirm('Reject this invite? You will not be added to the trip.')) return;
+
+        const res    = await fetch(`/reject_invite/${id}`, { method: 'POST' });
+        const result = await res.json();
+        if (result.status === 'success') {
+          row.style.transition = 'opacity 0.3s';
+          row.style.opacity    = '0';
+          setTimeout(() => {
+            row.remove();
+            // Hide panel if no invites left
+            const panel = document.getElementById('invitesPanel');
+            if (panel && panel.querySelectorAll('.invite-card').length === 0) {
+              panel.style.display = 'none';
+            }
+          }, 300);
+        } else {
+          alert('⚠ ' + (result.message || 'Failed to reject invite.'));
+        }
       });
     });
   </script>

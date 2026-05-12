@@ -1218,3 +1218,240 @@ body {
   color: var(--amber) !important;
   font-weight: 600;
 }
+
+/* ── Pending invites section ─────────────────────────────────────────────── */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.section-divider::before,
+.section-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.section-divider-label {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+/* Invite row avatar — different colour from trip avatar */
+.invite-avatar {
+  background: linear-gradient(135deg, #8b5cf6, #06b6d4) !important;
+}
+
+/* Accept / Reject buttons */
+.btn-accept-invite {
+  background: var(--green-dim);
+  border: 1px solid rgba(52,211,153,0.35);
+  color: var(--green);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+.btn-accept-invite:hover {
+  background: rgba(52,211,153,0.2);
+  border-color: var(--green);
+}
+
+.btn-reject-invite {
+  background: var(--red-dim);
+  border: 1px solid rgba(248,113,113,0.25);
+  color: var(--red);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+.btn-reject-invite:hover {
+  background: rgba(248,113,113,0.2);
+  border-color: var(--red);
+}
+
+/* ── Home page two-column layout ─────────────────────────────────────────── */
+.home-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 100px 24px 60px;
+  position: relative;
+  z-index: 2;
+}
+
+/* Trips column — takes up remaining space */
+.home-layout .home-wrap {
+  flex: 1;
+  min-width: 0;
+  padding: 0;       /* padding handled by home-layout */
+  max-width: none;
+  margin: 0;
+}
+
+/* ── Invites side panel ──────────────────────────────────────────────────── */
+.invites-panel {
+  width: 300px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  position: sticky;
+  top: 90px;        /* stays visible as trips list scrolls */
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+}
+
+.invites-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.invite-count-badge {
+  background: var(--amber-dim);
+  border: 1px solid var(--amber-glow);
+  color: var(--amber);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+
+/* Scrollable invite list */
+.invites-scroll {
+  overflow-y: auto;
+  flex: 1;
+}
+.invites-scroll::-webkit-scrollbar { width: 4px; }
+.invites-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* Individual invite card */
+.invite-card {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.2s;
+}
+.invite-card:last-child { border-bottom: none; }
+.invite-card:hover { background: rgba(255,255,255,0.03); }
+
+.invite-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.invite-card-top .trip-row-avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.invite-card-top .trip-row-name {
+  font-size: 0.9rem;
+}
+.invite-card-top .trip-row-date {
+  font-size: 0.75rem;
+}
+
+/* Accept / Reject action buttons inside card */
+.invite-actions {
+  display: flex;
+  gap: 8px;
+}
+.invite-actions .btn-accept-invite,
+.invite-actions .btn-reject-invite {
+  flex: 1;
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  text-align: center;
+}
+
+/* Inline alias input row — shown after Accept is clicked */
+.invite-alias-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.invite-alias-row .field {
+  flex: 1;
+  margin-bottom: 0;
+  font-size: 0.85rem;
+  padding: 8px 10px;
+}
+.invite-alias-row .btn-accept-invite {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+/* Responsive: stack panel below trips on narrow screens */
+@media (max-width: 720px) {
+  .home-layout {
+    flex-direction: column;
+    padding-top: 80px;
+  }
+  .invites-panel {
+    width: 100%;
+    position: static;
+    max-height: 320px;
+  }
+}
+
+/* ── Member entry v2 — mutual blocking layout ────────────────────────────── */
+.member-entry-v2 {
+  display: grid;
+  grid-template-columns: 28px 1fr 1fr;
+  align-items: start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.member-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  position: relative;  /* for dropdown positioning */
+}
+.member-field-group .field {
+  margin-bottom: 0;
+}
+/* Locked/disabled field */
+.field-locked {
+  opacity: 0.3 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+/* Inline hint beneath field */
+.field-inline-hint {
+  font-size: 0.68rem;
+  line-height: 1.3;
+  min-height: 12px;
+  padding: 0 2px;
+}
+.hint-info { color: var(--green);  }
+.hint-warn { color: var(--amber);  }

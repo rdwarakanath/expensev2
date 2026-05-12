@@ -37,9 +37,8 @@ def login_required(f):
 
 def check_trip_access(trip_id, user_id, conn=None):
     """
-    Returns trip row if user has access via trip_users table.
-    Returns None if no access or trip doesn't exist.
-    Accepts optional existing connection to avoid double-open.
+    Returns trip row only if user has ACCEPTED access via trip_users.
+    Pending and rejected users are blocked.
     """
     close_after = False
     if conn is None:
@@ -50,7 +49,7 @@ def check_trip_access(trip_id, user_id, conn=None):
         SELECT t.id, t.trip_name, t.is_active, t.created_by
         FROM   trips      t
         JOIN   trip_users tu ON tu.trip_id = t.id
-        WHERE  t.id = ? AND tu.user_id = ?
+        WHERE  t.id = ? AND tu.user_id = ? AND tu.status = 'accepted'
     """, (trip_id, user_id))
     row = cur.fetchone()
     if close_after:
@@ -409,27 +408,44 @@ def logout():
 @login_required
 def home():
     """
-    Shows all trips the user has access to via trip_users.
-    Also passes created_by so UI knows who can delete vs leave.
+    Shows accepted trips and pending invites separately.
+    Accepted trips: user can access dashboard/results.
+    Pending invites: shown in a separate section with Accept/Reject buttons.
     """
     user_id = session['user_id']
     conn    = get_db()
     cur     = conn.cursor()
+
+    # Accepted trips only
     cur.execute("""
         SELECT t.id, t.trip_name, t.is_active, t.created_at, t.created_by
         FROM   trips      t
         JOIN   trip_users tu ON tu.trip_id = t.id
-        WHERE  tu.user_id = ?
+        WHERE  tu.user_id = ? AND tu.status = 'accepted'
         ORDER  BY t.created_at DESC
     """, (user_id,))
     trips = [dict(r) for r in cur.fetchall()]
+
+    # Pending invites — trips this user was invited to but hasn't responded
+    cur.execute("""
+        SELECT t.id, t.trip_name, t.created_at,
+               u.username AS invited_by
+        FROM   trips      t
+        JOIN   trip_users tu  ON tu.trip_id  = t.id
+        JOIN   users      u   ON u.id        = t.created_by
+        WHERE  tu.user_id = ? AND tu.status = 'pending'
+        ORDER  BY t.created_at DESC
+    """, (user_id,))
+    pending_invites = [dict(r) for r in cur.fetchall()]
+
     conn.close()
 
     return render_template('home.html',
                            username=session['username'],
                            user_id=user_id,
                            creator_username=session['username'],
-                           trips=trips)
+                           trips=trips,
+                           pending_invites=pending_invites)
 
 
 # =========================================================
@@ -514,27 +530,40 @@ def create_trip_route():
 
         # 3. Insert each member
         for m in members:
-            alias    = m.get('alias', '').strip().lower()
-            uname    = m.get('username', '').strip().lower()
-            member_uid = None
+            alias  = m.get('alias', '').strip().lower()
+            uname  = m.get('username', '').strip().lower()
+            is_creator_row = m.get('is_creator', False)
 
-            if uname:
-                # Look up username in users table
+            if is_creator_row:
+                # Creator row — already in trip_users as accepted, add to members
+                cur.execute(
+                    "INSERT INTO members (trip_id, name, user_id) VALUES (?, ?, ?)",
+                    (trip_id, alias, user_id)
+                )
+            elif uname:
+                # Username provided — look up in users table
                 cur.execute("SELECT id FROM users WHERE LOWER(username) = ?", (uname,))
                 urow = cur.fetchone()
                 if urow:
                     member_uid = urow['id']
-                    # Grant trip access to this user
+                    # Insert into trip_users as PENDING — NOT into members yet
                     cur.execute(
-                        "INSERT OR IGNORE INTO trip_users (trip_id, user_id) VALUES (?, ?)",
+                        "INSERT OR IGNORE INTO trip_users (trip_id, user_id, status) VALUES (?, ?, 'pending')",
                         (trip_id, member_uid)
                     )
-                # If username not found → alias only, no access (no error, just skip)
-
-            cur.execute(
-                "INSERT INTO members (trip_id, name, user_id) VALUES (?, ?, ?)",
-                (trip_id, alias, member_uid)
-            )
+                    # Do NOT insert into members — only added on invite acceptance
+                else:
+                    # Username not found → treat as alias-only member
+                    cur.execute(
+                        "INSERT INTO members (trip_id, name, user_id) VALUES (?, ?, NULL)",
+                        (trip_id, alias)
+                    )
+            else:
+                # No username — alias-only member, add directly to members
+                cur.execute(
+                    "INSERT INTO members (trip_id, name, user_id) VALUES (?, ?, NULL)",
+                    (trip_id, alias)
+                )
 
         conn.commit()
     except Exception as e:
@@ -731,6 +760,116 @@ def results(trip_id):
 
 
 
+
+# =========================================================
+# ── INVITE ROUTES ─────────────────────────────────────────
+# =========================================================
+
+@app.route('/accept_invite/<int:trip_id>', methods=['POST'])
+@login_required
+def accept_invite(trip_id):
+    """
+    Accept a pending invite:
+    1. Set trip_users.status = 'accepted'
+    2. Add user to members table with their alias
+    Alias is sent in the POST body.
+    """
+    user_id = session['user_id']
+    data    = request.get_json() or {}
+    alias   = data.get('alias', '').strip().lower()
+
+    if not alias:
+        return jsonify({"status": "error", "message": "Alias is required to accept invite"}), 400
+
+    conn = get_db()
+    cur  = conn.cursor()
+
+    # Verify invite is actually pending for this user
+    cur.execute("""
+        SELECT status FROM trip_users
+        WHERE trip_id = ? AND user_id = ?
+    """, (trip_id, user_id))
+    row = cur.fetchone()
+
+    if not row:
+        conn.close()
+        return jsonify({"status": "error", "message": "Invite not found"}), 404
+    if row['status'] != 'pending':
+        conn.close()
+        return jsonify({"status": "error", "message": "Invite already responded to"}), 400
+
+    # Check alias uniqueness in this trip
+    cur.execute(
+        "SELECT id FROM members WHERE trip_id = ? AND name = ?",
+        (trip_id, alias)
+    )
+    if cur.fetchone():
+        conn.close()
+        return jsonify({"status": "error", "message": f"Alias '{alias}' is already taken in this trip"}), 400
+
+    try:
+        # Mark as accepted
+        cur.execute("""
+            UPDATE trip_users SET status = 'accepted'
+            WHERE trip_id = ? AND user_id = ?
+        """, (trip_id, user_id))
+
+        # Add to members table now that invite is accepted
+        cur.execute(
+            "INSERT INTO members (trip_id, name, user_id) VALUES (?, ?, ?)",
+            (trip_id, alias, user_id)
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        conn.close()
+
+    return jsonify({"status": "success"})
+
+
+@app.route('/reject_invite/<int:trip_id>', methods=['POST'])
+@login_required
+def reject_invite(trip_id):
+    """
+    Reject a pending invite:
+    Sets trip_users.status = 'rejected'.
+    User is NOT added to members. They lose all trip visibility.
+    """
+    user_id = session['user_id']
+    conn    = get_db()
+    cur     = conn.cursor()
+
+    cur.execute("""
+        SELECT status FROM trip_users
+        WHERE trip_id = ? AND user_id = ?
+    """, (trip_id, user_id))
+    row = cur.fetchone()
+
+    if not row:
+        conn.close()
+        return jsonify({"status": "error", "message": "Invite not found"}), 404
+    if row['status'] != 'pending':
+        conn.close()
+        return jsonify({"status": "error", "message": "Invite already responded to"}), 400
+
+    try:
+        cur.execute("""
+            UPDATE trip_users SET status = 'rejected'
+            WHERE trip_id = ? AND user_id = ?
+        """, (trip_id, user_id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        conn.close()
+
+    return jsonify({"status": "success"})
+
 # =========================================================
 # ── DELETE ROUTES ─────────────────────────────────────────
 # =========================================================
@@ -790,23 +929,51 @@ def leave_trip(trip_id):
     conn = get_db()
     cur  = conn.cursor()
     try:
+        # Get member id for this user in this trip (needed to clean up splits)
+        cur.execute(
+            "SELECT id FROM members WHERE trip_id = ? AND user_id = ?",
+            (trip_id, user_id)
+        )
+        member_row = cur.fetchone()
+
+        if member_row:
+            member_id = member_row['id']
+            # Delete expense_splits referencing this member FIRST
+            # (FK constraint: expense_splits.member_id → members.id)
+            cur.execute(
+                "DELETE FROM expense_splits WHERE member_id = ?",
+                (member_id,)
+            )
+            # Now safe to delete from members
+            cur.execute(
+                "DELETE FROM members WHERE id = ?",
+                (member_id,)
+            )
+
+        # Remove from trip_users
         cur.execute(
             "DELETE FROM trip_users WHERE trip_id = ? AND user_id = ?",
             (trip_id, user_id)
         )
 
-        # Check if anyone still has access
-        cur.execute("SELECT COUNT(*) AS cnt FROM trip_users WHERE trip_id = ?", (trip_id,))
+        # Check if anyone still has access (accepted users only)
+        cur.execute("""
+            SELECT COUNT(*) AS cnt FROM trip_users
+            WHERE trip_id = ? AND status = 'accepted'
+        """, (trip_id,))
         remaining = cur.fetchone()['cnt']
 
         if remaining == 0:
-            # Last user left — auto delete everything
+            # Last accepted user left — auto delete everything
+            # Must delete in correct FK order: splits → expenses → members
+            # → trip_users (pending/rejected rows) → trip
             cur.execute("""
                 DELETE FROM expense_splits
                 WHERE expense_id IN (SELECT id FROM expenses WHERE trip_id = ?)
             """, (trip_id,))
             cur.execute("DELETE FROM expenses WHERE trip_id = ?", (trip_id,))
             cur.execute("DELETE FROM members WHERE trip_id = ?", (trip_id,))
+            cur.execute("DELETE FROM trip_users WHERE trip_id = ?", (trip_id,))
             cur.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
 
         conn.commit()
@@ -832,13 +999,13 @@ def delete_expense(expense_id):
     conn    = get_db()
     cur     = conn.cursor()
 
-    # Verify expense exists and user has access to its trip via trip_users
+    # Verify expense exists and user has ACCEPTED access to its trip
     cur.execute("""
         SELECT e.id, t.is_active
         FROM   expenses   e
         JOIN   trips      t  ON e.trip_id  = t.id
         JOIN   trip_users tu ON tu.trip_id = t.id
-        WHERE  e.id = ? AND tu.user_id = ?
+        WHERE  e.id = ? AND tu.user_id = ? AND tu.status = 'accepted'
     """, (expense_id, user_id))
     row = cur.fetchone()
 
