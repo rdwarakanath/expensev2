@@ -499,11 +499,27 @@ def create_trip_route():
     if not members or len(members) < 1:
         return jsonify({"error": "At least one member is required"}), 400
 
-    # Validate all aliases present and unique (case-insensitive)
-    aliases = [m.get('alias', '').strip().lower() for m in members]
-    if any(a == '' for a in aliases):
-        return jsonify({"error": "All members must have an alias"}), 400
-    if len(set(aliases)) != len(aliases):
+    # Validate aliases per member type:
+    # - creator row        → alias required
+    # - alias-only member  → alias required (no username)
+    # - username-linked    → alias intentionally empty, skip (chosen on invite accept)
+    required_aliases = []
+    for m in members:
+        alias    = m.get('alias', '').strip().lower()
+        username = m.get('username', '').strip().lower()
+        is_cr    = m.get('is_creator', False)
+        if is_cr:
+            if not alias:
+                return jsonify({"error": "Creator must have an alias"}), 400
+            required_aliases.append(alias)
+        elif not username:
+            # alias-only member — alias required from creator now
+            if not alias:
+                return jsonify({"error": "Non-app members must have an alias"}), 400
+            required_aliases.append(alias)
+        # username-linked: alias empty is fine — they pick it on accept
+
+    if len(set(required_aliases)) != len(required_aliases):
         return jsonify({"error": "Duplicate alias names are not allowed"}), 400
 
     # Validate usernames unique among those provided (ignore blank ones)
@@ -929,28 +945,16 @@ def leave_trip(trip_id):
     conn = get_db()
     cur  = conn.cursor()
     try:
-        # Get member id for this user in this trip (needed to clean up splits)
+        # Unlink this user's account from their member row but KEEP the row.
+        # This preserves all past expense_splits and transaction history.
+        # Setting user_id = NULL means the alias stays in calculations
+        # but the account no longer has login access to this trip.
         cur.execute(
-            "SELECT id FROM members WHERE trip_id = ? AND user_id = ?",
+            "UPDATE members SET user_id = NULL WHERE trip_id = ? AND user_id = ?",
             (trip_id, user_id)
         )
-        member_row = cur.fetchone()
 
-        if member_row:
-            member_id = member_row['id']
-            # Delete expense_splits referencing this member FIRST
-            # (FK constraint: expense_splits.member_id → members.id)
-            cur.execute(
-                "DELETE FROM expense_splits WHERE member_id = ?",
-                (member_id,)
-            )
-            # Now safe to delete from members
-            cur.execute(
-                "DELETE FROM members WHERE id = ?",
-                (member_id,)
-            )
-
-        # Remove from trip_users
+        # Remove login access — only trip_users row is deleted
         cur.execute(
             "DELETE FROM trip_users WHERE trip_id = ? AND user_id = ?",
             (trip_id, user_id)
