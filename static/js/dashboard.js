@@ -125,7 +125,16 @@ function rebuildCustomInputs() {
     input.placeholder = "0.00";
     input.min         = "0";
     input.classList.add("share-input", "inline-share-input");
-    input.addEventListener("input", updateRemaining);
+    input.addEventListener("input", (e) => {
+      const val = e.target.value;
+      if (val.includes(".")) {
+        const parts = val.split(".");
+        if (parts[1].length > 2) {
+          e.target.value = parts[0] + "." + parts[1].slice(0, 2);
+        }
+      }
+      updateRemaining();
+    });
 
     row.appendChild(avatar);
     row.appendChild(name);
@@ -138,17 +147,21 @@ function rebuildCustomInputs() {
 
 // ── Live remaining counter ────────────────────────────────────────────────
 function updateRemaining() {
-  const amount    = parseFloat(document.getElementById("expenseAmount").value) || 0;
-  const inputs    = document.querySelectorAll(".inline-share-input");
-  const entered   = Array.from(inputs).reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
-  const remaining = roundTo(amount - entered, 2);
+    const amount    = parseFloat(document.getElementById("expenseAmount").value) || 0;
+    const inputs    = document.querySelectorAll(".inline-share-input");
+    const entered   = Array.from(inputs).reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
+    const remaining = roundTo(amount - entered, 2);
 
-  if (splitsRemaining) {
-    splitsRemaining.textContent = `₹${remaining.toFixed(2)}`;
-    splitsRemaining.className   = "splits-total-value " +
-      (Math.abs(remaining) < 0.01 ? "remaining-ok" : remaining < 0 ? "remaining-over" : "");
+    if (splitsRemaining) {
+      splitsRemaining.textContent = `₹${remaining.toFixed(2)}`;
+      splitsRemaining.className   = "splits-total-value " +
+        (Math.abs(remaining) < 0.01 ? "remaining-ok" : remaining < 0 ? "remaining-over" : "");
+    }
+
+    // Clear shares error banner on re-input
+    const sharesErr = document.getElementById("sharesErrorBanner");
+    if (sharesErr) hideModalError(sharesErr);
   }
-}
 
 // Rebuild when amount field changes while in custom mode
 document.getElementById("expenseAmount").addEventListener("input", () => {
@@ -235,21 +248,24 @@ async function addExpenseCard(reason, amount, members, shares, whopaid) {
 
 // ── Reset form ────────────────────────────────────────────────────────────
 function resetExpenseForm() {
-  closeExpenseForm();
-  document.getElementById("expenseReason").value = "";
-  document.getElementById("expenseAmount").value = "";
-  document.getElementById("paidby").value = "";
-  document.querySelectorAll(".member-checkboxes input[type='checkbox']")
-    .forEach(cb => cb.checked = false);
-  // Reset split toggle back to Equal
-  const equalRadio = document.querySelector("input[name='shareType'][value='equal']");
-  if (equalRadio) {
-    equalRadio.checked = true;
-    document.querySelectorAll('.toggle-opt').forEach(l => l.classList.remove('active'));
-    equalRadio.closest('.toggle-opt').classList.add('active');
+    closeExpenseForm();
+    document.getElementById("expenseReason").value = "";
+    document.getElementById("expenseAmount").value = "";
+    document.getElementById("paidby").value = "";
+    document.querySelectorAll(".member-checkboxes input[type='checkbox']")
+      .forEach(cb => cb.checked = false);
+    // Reset split toggle back to Equal
+    const equalRadio = document.querySelector("input[name='shareType'][value='equal']");
+    if (equalRadio) {
+      equalRadio.checked = true;
+      document.querySelectorAll('.toggle-opt').forEach(l => l.classList.remove('active'));
+      equalRadio.closest('.toggle-opt').classList.add('active');
+    }
+    // Clear shares error banner on form reset
+    const sharesErr = document.getElementById("sharesErrorBanner");
+    if (sharesErr) hideModalError(sharesErr);
+    collapseCustomSplits();
   }
-  collapseCustomSplits();
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase(); }

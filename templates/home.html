@@ -1,15 +1,23 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>PayBait — Home</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"></noscript>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap"
+    rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap"
+      rel="stylesheet">
+  </noscript>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body>
 
   <div class="bg-mesh">
@@ -30,103 +38,91 @@
 
   <!-- Main content: two-column layout — trips left, invites panel right -->
   <div class="home-layout">
-  <div class="home-wrap">
+    <div class="home-wrap">
 
-    <!-- Header row -->
-    <div class="home-header">
-      <div>
-        <p class="hero-label">YOUR TRIPS</p>
-        <h1 class="home-title">Hey, <span class="hero-accent">{{ username }}</span> 👋</h1>
-      </div>
-      <button id="newTripBtn" class="cta-btn">
-        <span class="cta-icon">+</span> New Trip
-      </button>
-    </div>
-
-    <!-- Trip history list -->
-    {% if trips %}
-    <div class="trip-list">
-      {% for trip in trips %}
-      <div class="trip-row">
-        <div class="trip-row-left">
-          <div class="trip-row-avatar">{{ trip.trip_name[0] | upper }}</div>
-          <div class="trip-row-info">
-            <span class="trip-row-name">{{ trip.trip_name }}</span>
-            <span class="trip-row-date">{{ trip.created_at[:10] }}</span>
-          </div>
+      <!-- Header row -->
+      <div class="home-header">
+        <div>
+          <p class="hero-label">YOUR TRIPS</p>
+          <h1 class="home-title">Hey, <span class="hero-accent">{{ username }}</span> 👋</h1>
         </div>
-        <div class="trip-row-right">
-          {% if trip.is_active %}
+        <button id="newTripBtn" class="cta-btn">
+          <span class="cta-icon">+</span> New Trip
+        </button>
+      </div>
+
+      <!-- Trip history list -->
+      {% if trips %}
+      <div class="trip-list">
+        {% for trip in trips %}
+        <div class="trip-row">
+          <div class="trip-row-left">
+            <div class="trip-row-avatar">{{ trip.trip_name[0] | upper }}</div>
+            <div class="trip-row-info">
+              <span class="trip-row-name">{{ trip.trip_name }}</span>
+              <span class="trip-row-date">{{ trip.created_at.strftime('%d-%m-%Y') }}</span>
+            </div>
+          </div>
+          <div class="trip-row-right">
+            {% if trip.is_active %}
             <span class="trip-badge badge-active">● Active</span>
             <a href="/dashboard/{{ trip.id }}" class="btn-primary trip-btn">Continue</a>
-          {% else %}
+            {% else %}
             <span class="trip-badge badge-done">✓ Done</span>
             <a href="/results/{{ trip.id }}" class="btn-ghost trip-btn">View Results</a>
-          {% endif %}
-          {% if trip.created_by == user_id %}
-          <button class="trip-delete-btn"
-                  data-id="{{ trip.id }}"
-                  data-name="{{ trip.trip_name }}"
-                  data-action="delete"
-                  title="Delete trip">🗑</button>
-          {% else %}
-          <button class="trip-delete-btn trip-leave-btn"
-                  data-id="{{ trip.id }}"
-                  data-name="{{ trip.trip_name }}"
-                  data-action="leave"
-                  title="Leave trip">← Leave</button>
-          {% endif %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="home-empty">
-      <div class="empty-icon">🗺</div>
-      <p class="empty-text">No trips yet.<br>Hit <strong>+ New Trip</strong> to get started.</p>
-    </div>
-    {% endif %}
-
-  </div><!-- /home-wrap -->
-
-  <!-- ── PENDING INVITES SIDE PANEL ── -->
-  <!-- Always rendered; hidden via CSS when empty so JS can still reference it -->
-  <div class="invites-panel" id="invitesPanel" {% if not pending_invites %}style="display:none"{% endif %}>
-    <div class="invites-panel-header">
-      <span class="section-divider-label">📬 Invites</span>
-      <span class="invite-count-badge">{{ pending_invites | length }}</span>
-    </div>
-    <div class="invites-scroll">
-      {% for invite in pending_invites %}
-      <div class="invite-card" id="invite-row-{{ invite.id }}">
-        <div class="invite-card-top">
-          <div class="trip-row-avatar invite-avatar">{{ invite.trip_name[0] | upper }}</div>
-          <div class="trip-row-info">
-            <span class="trip-row-name">{{ invite.trip_name }}</span>
-            <span class="trip-row-date">by <strong>{{ invite.invited_by }}</strong></span>
+            {% endif %}
+            {% if trip.created_by == user_id %}
+            <button class="trip-delete-btn" data-id="{{ trip.id }}" data-name="{{ trip.trip_name }}"
+              data-action="delete" title="Delete trip">🗑</button>
+            {% else %}
+            <button class="trip-delete-btn trip-leave-btn" data-id="{{ trip.id }}" data-name="{{ trip.trip_name }}"
+              data-action="leave" title="Leave trip">← Leave</button>
+            {% endif %}
           </div>
         </div>
-        <!-- Inline alias input — shown when Accept is clicked -->
-        <div class="invite-alias-row hidden" id="alias-row-{{ invite.id }}">
-          <input type="text"
-                 class="field invite-alias-input"
-                 id="alias-input-{{ invite.id }}"
-                 placeholder="Your alias in this trip"
-                 autocomplete="off" />
-          <button class="btn-accept-invite confirm-accept-btn"
-                  data-id="{{ invite.id }}">✓ Join</button>
-        </div>
-        <div class="invite-actions" id="invite-actions-{{ invite.id }}">
-          <button class="btn-accept-invite show-alias-btn"
-                  data-id="{{ invite.id }}"
-                  data-name="{{ invite.trip_name }}">✓ Accept</button>
-          <button class="btn-reject-invite"
-                  data-id="{{ invite.id }}">✕ Reject</button>
-        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
+      {% else %}
+      <div class="home-empty">
+        <div class="empty-icon">🗺</div>
+        <p class="empty-text">No trips yet.<br>Hit <strong>+ New Trip</strong> to get started.</p>
+      </div>
+      {% endif %}
+
+    </div><!-- /home-wrap -->
+
+    <!-- ── PENDING INVITES SIDE PANEL ── -->
+    <!-- Always rendered; hidden via CSS when empty so JS can still reference it -->
+    <div class="invites-panel" id="invitesPanel" {% if not pending_invites %}style="display:none" {% endif %}>
+      <div class="invites-panel-header">
+        <span class="section-divider-label">📬 Invites</span>
+        <span class="invite-count-badge">{{ pending_invites | length }}</span>
+      </div>
+      <div class="invites-scroll">
+        {% for invite in pending_invites %}
+        <div class="invite-card" id="invite-row-{{ invite.id }}">
+          <div class="invite-card-top">
+            <div class="trip-row-avatar invite-avatar">{{ invite.trip_name[0] | upper }}</div>
+            <div class="trip-row-info">
+              <span class="trip-row-name">{{ invite.trip_name }}</span>
+              <span class="trip-row-date">by <strong>{{ invite.invited_by }}</strong></span>
+            </div>
+          </div>
+          <!-- Inline alias input — shown when Accept is clicked -->
+          <div class="invite-alias-row hidden" id="alias-row-{{ invite.id }}">
+            <input type="text" class="field invite-alias-input" id="alias-input-{{ invite.id }}"
+              placeholder="Your alias in this trip" autocomplete="off" />
+            <button class="btn-accept-invite confirm-accept-btn" data-id="{{ invite.id }}">✓ Join</button>
+          </div>
+          <div class="invite-actions" id="invite-actions-{{ invite.id }}">
+            <button class="btn-accept-invite show-alias-btn" data-id="{{ invite.id }}"
+              data-name="{{ invite.trip_name }}">✓ Accept</button>
+            <button class="btn-reject-invite" data-id="{{ invite.id }}">✕ Reject</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
     </div>
-  </div>
 
   </div><!-- /home-layout -->
 
@@ -160,7 +156,7 @@
   <div id="memberNamesBox" class="modal hidden">
     <div class="modal-step">STEP 3 OF 3</div>
     <h2 class="modal-title">Add members</h2>
-    <p class="modal-hint">Alias is required. Username links them to their account.</p>
+    <p class="modal-hint">Username links them to their account.<br>Enter Alias name for members without an account.</p>
     <div class="modal-error-banner" id="membersErrorBanner"></div>
     <form id="memberForm" class="name-form"></form>
     <div class="modal-actions">
@@ -173,20 +169,20 @@
   <div class="modal-backdrop hidden" id="modalBackdrop"></div>
 
   <script>
-    const currentUserId      = {{ user_id }};
-    const creatorUsername     = {{ creator_username | tojson }};
-    const newTripBtn     = document.getElementById("newTripBtn");
-    const tripBox        = document.getElementById("tripBox");
-    const cancelBtn      = document.getElementById("cancelBtn");
-    const saveBtn        = document.getElementById("saveBtn");
+    const currentUserId = {{ user_id }};
+    const creatorUsername = {{ creator_username | tojson }};
+    const newTripBtn = document.getElementById("newTripBtn");
+    const tripBox = document.getElementById("tripBox");
+    const cancelBtn = document.getElementById("cancelBtn");
+    const saveBtn = document.getElementById("saveBtn");
     const memberCountBox = document.getElementById("memberCountBox");
     const memberNamesBox = document.getElementById("memberNamesBox");
-    const nextBtn        = document.getElementById("nextBtn");
-    const backBtn        = document.getElementById("backBtn");
-    const prevBtn        = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const backBtn = document.getElementById("backBtn");
+    const prevBtn = document.getElementById("prevBtn");
     const saveMembersBtn = document.getElementById("saveMembersBtn");
-    const memberForm     = document.getElementById("memberForm");
-    const backdrop       = document.getElementById("modalBackdrop");
+    const memberForm = document.getElementById("memberForm");
+    const backdrop = document.getElementById("modalBackdrop");
     let count;
 
     function showModal(modal) {
@@ -237,7 +233,7 @@
         if (q.length < 1) return;
 
         debounceTimer = setTimeout(async () => {
-          const res  = await fetch(`/search_users?q=${encodeURIComponent(q)}`);
+          const res = await fetch(`/search_users?q=${encodeURIComponent(q)}`);
           const list = await res.json();
 
           closeAllDropdowns();
@@ -248,7 +244,7 @@
 
           list.forEach(username => {
             const item = document.createElement("div");
-            item.className   = "username-dropdown-item";
+            item.className = "username-dropdown-item";
             item.textContent = username;
             item.addEventListener("mousedown", (e) => {
               e.preventDefault(); // prevent blur before click
@@ -290,11 +286,11 @@
       creatorWrap.className = "member-entry";
 
       const creatorNum = document.createElement("span");
-      creatorNum.className   = "name-num";
+      creatorNum.className = "name-num";
       creatorNum.textContent = "You";
 
       const creatorAlias = document.createElement("input");
-      creatorAlias.type        = "text";
+      creatorAlias.type = "text";
       creatorAlias.placeholder = "Your alias (required)";
       creatorAlias.classList.add("field", "member-alias-input");
 
@@ -302,10 +298,10 @@
       const creatorUserWrap = document.createElement("div");
       creatorUserWrap.className = "username-wrap";
       const creatorUserInput = document.createElement("input");
-      creatorUserInput.type                = "text";
-      creatorUserInput.value               = creatorUsername;
-      creatorUserInput.readOnly            = true;
-      creatorUserInput.dataset.validated   = "true";  // always valid
+      creatorUserInput.type = "text";
+      creatorUserInput.value = creatorUsername;
+      creatorUserInput.readOnly = true;
+      creatorUserInput.dataset.validated = "true";  // always valid
       creatorUserInput.classList.add("field", "member-username-input", "creator-username-locked");
       creatorUserWrap.appendChild(creatorUserInput);
 
@@ -324,7 +320,7 @@
         wrap.className = "member-entry-v2";
 
         const num = document.createElement("span");
-        num.className   = "name-num";
+        num.className = "name-num";
         num.textContent = i + 1;
 
         // ── Alias field + hint ──
@@ -332,8 +328,8 @@
         aliasGroup.className = "member-field-group";
 
         const aliasInput = document.createElement("input");
-        aliasInput.type         = "text";
-        aliasInput.placeholder  = "Alias (non-app member)";
+        aliasInput.type = "text";
+        aliasInput.placeholder = "Alias (non-app member)";
         aliasInput.autocomplete = "off";
         aliasInput.classList.add("field", "member-alias-input");
 
@@ -348,9 +344,9 @@
         userGroup.className = "member-field-group username-wrap";
 
         const userInput = document.createElement("input");
-        userInput.type              = "text";
-        userInput.placeholder       = "Username (app user)";
-        userInput.autocomplete      = "off";
+        userInput.type = "text";
+        userInput.placeholder = "Username (app user)";
+        userInput.autocomplete = "off";
         userInput.dataset.validated = "";
         userInput.classList.add("field", "member-username-input");
 
@@ -362,23 +358,23 @@
 
         // ── Mutual blocking ───────────────────────────────────────────────────
         function updateMemberState() {
-          const hasAlias    = aliasInput.value.trim() !== '';
-          const hasUsername = userInput.value.trim()  !== '';
+          const hasAlias = aliasInput.value.trim() !== '';
+          const hasUsername = userInput.value.trim() !== '';
 
           if (hasUsername) {
             // Username filled → lock alias, show info hint
-            aliasInput.disabled  = true;
-            aliasInput.value     = '';
+            aliasInput.disabled = true;
+            aliasInput.value = '';
             aliasInput.classList.add('field-locked');
             aliasHint.textContent = "Will be set by member when they accept";
-            userHint.textContent  = "";
+            userHint.textContent = "";
           } else if (hasAlias) {
             // Alias filled → lock username, show warn hint
-            userInput.disabled  = true;
-            userInput.value     = '';
+            userInput.disabled = true;
+            userInput.value = '';
             userInput.dataset.validated = '';
             userInput.classList.add('field-locked');
-            userHint.textContent  = "Non-app members cannot have a username";
+            userHint.textContent = "Non-app members cannot have a username";
             aliasHint.textContent = "";
             closeAllDropdowns();
           } else {
@@ -386,14 +382,14 @@
             aliasInput.disabled = false;
             aliasInput.classList.remove('field-locked');
             aliasHint.textContent = "";
-            userInput.disabled  = false;
+            userInput.disabled = false;
             userInput.classList.remove('field-locked');
-            userHint.textContent  = "";
+            userHint.textContent = "";
           }
         }
 
         aliasInput.addEventListener('input', updateMemberState);
-        userInput.addEventListener('input',  updateMemberState);
+        userInput.addEventListener('input', updateMemberState);
 
         attachUsernameDropdown(userInput);
 
@@ -418,7 +414,7 @@
 
     saveMembersBtn.addEventListener("click", async () => {
       const aliasInputs = document.querySelectorAll(".member-alias-input");
-      const userInputs  = document.querySelectorAll(".member-username-input");
+      const userInputs = document.querySelectorAll(".member-username-input");
 
       // Creator row (idx 0): alias required
       const creatorAlias = aliasInputs[0].value.trim().toLowerCase();
@@ -429,8 +425,8 @@
       // Additional rows: must have username OR alias (not both empty)
       // Check active (non-disabled) fields only
       for (let i = 1; i < userInputs.length; i++) {
-        const activeUsername = !userInputs[i].disabled  && userInputs[i].value.trim()  !== '';
-        const activeAlias    = !aliasInputs[i].disabled && aliasInputs[i].value.trim() !== '';
+        const activeUsername = !userInputs[i].disabled && userInputs[i].value.trim() !== '';
+        const activeAlias = !aliasInputs[i].disabled && aliasInputs[i].value.trim() !== '';
         if (!activeUsername && !activeAlias) {
           showModalError(document.getElementById("membersErrorBanner"), `Row ${i + 1}: enter a username or an alias.`); return;
         }
@@ -459,12 +455,12 @@
 
       // Validate: non-creator username fields — if filled and not validated
       for (let i = 1; i < userInputs.length; i++) {
-        const val       = userInputs[i].value.trim();
+        const val = userInputs[i].value.trim();
         const validated = userInputs[i].dataset.validated;
         if (val !== '' && validated !== 'true') {
-          const checkRes  = await fetch(`/search_users?q=${encodeURIComponent(val)}`);
+          const checkRes = await fetch(`/search_users?q=${encodeURIComponent(val)}`);
           const checkList = await checkRes.json();
-          const exact     = checkList.map(u => u.toLowerCase());
+          const exact = checkList.map(u => u.toLowerCase());
           if (!exact.includes(val.toLowerCase())) {
             showModalError(document.getElementById("membersErrorBanner"), `User "${val}" does not exist. Select from the dropdown or leave blank.`); userInputs[i].focus(); return;
           }
@@ -478,21 +474,21 @@
       // Alias-only: alias only, username empty
       // Use .disabled to detect locked fields — disabled = not the active field
       const members = Array.from(userInputs).map((uInp, idx) => ({
-        alias:      aliasInputs[idx].disabled ? '' : aliasInputs[idx].value.trim().toLowerCase(),
-        username:   uInp.disabled             ? '' : uInp.value.trim().toLowerCase(),
+        alias: aliasInputs[idx].disabled ? '' : aliasInputs[idx].value.trim().toLowerCase(),
+        username: uInp.disabled ? '' : uInp.value.trim().toLowerCase(),
         is_creator: idx === 0
       }));
 
       hideModalError(document.getElementById("membersErrorBanner"));
       saveMembersBtn.textContent = "Creating…";
-      saveMembersBtn.disabled    = true;
+      saveMembersBtn.disabled = true;
 
-      const res  = await fetch("/create_trip", {
+      const res = await fetch("/create_trip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tripName: window._pendingTripName,
-          members:  members
+          members: members
         })
       });
       const data = await res.json();
@@ -500,7 +496,7 @@
       if (data.error) {
         showModalError(document.getElementById("membersErrorBanner"), data.error);
         saveMembersBtn.textContent = "Create Trip ✓";
-        saveMembersBtn.disabled    = false;
+        saveMembersBtn.disabled = false;
         return;
       }
 
@@ -511,7 +507,7 @@
     document.addEventListener("keydown", e => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      if (!tripBox.classList.contains("hidden"))             saveBtn.click();
+      if (!tripBox.classList.contains("hidden")) saveBtn.click();
       else if (!memberCountBox.classList.contains("hidden")) nextBtn.click();
       else if (!memberNamesBox.classList.contains("hidden")) saveMembersBtn.click();
     });
@@ -531,10 +527,12 @@
         <h2 class="center-modal-title">Delete Trip</h2>
       </div>
       <div style="padding:16px 24px 24px">
-        <p id="homeConfirmMsg" style="color:var(--text-secondary);font-size:0.95rem;line-height:1.6;margin-bottom:20px"></p>
+        <p id="homeConfirmMsg" style="color:var(--text-secondary);font-size:0.95rem;line-height:1.6;margin-bottom:20px">
+        </p>
         <div style="display:flex;gap:10px;justify-content:flex-end">
           <button id="homeCancelBtn" class="btn-ghost">Cancel</button>
-          <button id="homeDeleteBtn" style="background:var(--red);color:#fff;font-family:var(--font-display);font-weight:700;font-size:0.92rem;padding:10px 22px;border:none;border-radius:var(--radius-sm);cursor:pointer">Delete</button>
+          <button id="homeDeleteBtn"
+            style="background:var(--red);color:#fff;font-family:var(--font-display);font-weight:700;font-size:0.92rem;padding:10px 22px;border:none;border-radius:var(--radius-sm);cursor:pointer">Delete</button>
         </div>
       </div>
     </div>
@@ -542,10 +540,10 @@
   <div class="modal-backdrop hidden" id="homeConfirmBackdrop"></div>
 
   <script>
-    const homeModal    = document.getElementById('homeConfirmModal');
-    const homeBdrop    = document.getElementById('homeConfirmBackdrop');
-    const homeMsg      = document.getElementById('homeConfirmMsg');
-    const homeDelBtn   = document.getElementById('homeDeleteBtn');
+    const homeModal = document.getElementById('homeConfirmModal');
+    const homeBdrop = document.getElementById('homeConfirmBackdrop');
+    const homeMsg = document.getElementById('homeConfirmMsg');
+    const homeDelBtn = document.getElementById('homeDeleteBtn');
     const homeCancelBtn = document.getElementById('homeCancelBtn');
 
     function showHomeConfirm(tripId, tripName, action, rowEl) {
@@ -556,16 +554,16 @@
       homeDelBtn.textContent = isDelete ? 'Delete' : 'Leave';
       homeModal.classList.remove('hidden');
       homeBdrop.classList.remove('hidden');
-      homeDelBtn.disabled    = false;
+      homeDelBtn.disabled = false;
 
       homeDelBtn.onclick = async () => {
         homeDelBtn.disabled = true;
-        const url    = isDelete ? `/delete_trip/${tripId}` : `/leave_trip/${tripId}`;
-        const res    = await fetch(url, { method: 'POST' });
+        const url = isDelete ? `/delete_trip/${tripId}` : `/leave_trip/${tripId}`;
+        const res = await fetch(url, { method: 'POST' });
         const result = await res.json();
         if (result.status === 'success') {
           rowEl.style.transition = 'opacity 0.3s';
-          rowEl.style.opacity    = '0';
+          rowEl.style.opacity = '0';
           setTimeout(() => rowEl.remove(), 300);
         } else {
           showToast(result.message || 'Action failed.', 'error');
@@ -580,7 +578,7 @@
     }
 
     homeCancelBtn.addEventListener('click', hideHomeConfirm);
-    homeBdrop.addEventListener('click',    hideHomeConfirm);
+    homeBdrop.addEventListener('click', hideHomeConfirm);
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') hideHomeConfirm();
     });
@@ -588,9 +586,9 @@
     // Wire all delete/leave buttons
     document.querySelectorAll('.trip-delete-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const row    = btn.closest('.trip-row');
-        const id     = btn.dataset.id;
-        const name   = btn.dataset.name;
+        const row = btn.closest('.trip-row');
+        const id = btn.dataset.id;
+        const name = btn.dataset.name;
         const action = btn.dataset.action; // 'delete' or 'leave'
         showHomeConfirm(id, name, action, row);
       });
@@ -602,7 +600,7 @@
     // ── Show alias input inline, hide the Accept/Reject buttons ──────────
     document.querySelectorAll('.show-alias-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id      = btn.dataset.id;
+        const id = btn.dataset.id;
         const actions = document.getElementById(`invite-actions-${id}`);
         const aliasRow = document.getElementById(`alias-row-${id}`);
         actions.classList.add('hidden');
@@ -614,19 +612,19 @@
     // ── Confirm join with alias ───────────────────────────────────────────
     document.querySelectorAll('.confirm-accept-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const id    = btn.dataset.id;
+        const id = btn.dataset.id;
         const input = document.getElementById(`alias-input-${id}`);
         const alias = input.value.trim().toLowerCase();
 
         if (!alias) { input.focus(); return; }
 
-        btn.disabled    = true;
+        btn.disabled = true;
         btn.textContent = '…';
 
-        const res    = await fetch(`/accept_invite/${id}`, {
-          method:  'POST',
+        const res = await fetch(`/accept_invite/${id}`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ alias })
+          body: JSON.stringify({ alias })
         });
         const result = await res.json();
 
@@ -634,7 +632,7 @@
           window.location.reload();
         } else {
           showToast(result.message || 'Failed to accept invite.', 'error');
-          btn.disabled    = false;
+          btn.disabled = false;
           btn.textContent = '✓ Join';
         }
       });
@@ -643,15 +641,15 @@
     // ── Reject invite ─────────────────────────────────────────────────────
     document.querySelectorAll('.btn-reject-invite').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const id  = btn.dataset.id;
+        const id = btn.dataset.id;
         const row = document.getElementById(`invite-row-${id}`);
         if (!confirm('Reject this invite? You will not be added to the trip.')) return;
 
-        const res    = await fetch(`/reject_invite/${id}`, { method: 'POST' });
+        const res = await fetch(`/reject_invite/${id}`, { method: 'POST' });
         const result = await res.json();
         if (result.status === 'success') {
           row.style.transition = 'opacity 0.3s';
-          row.style.opacity    = '0';
+          row.style.opacity = '0';
           setTimeout(() => {
             row.remove();
             // Hide panel if no invites left
@@ -668,4 +666,5 @@
   </script>
   <script src="{{ url_for('static', filename='js/notify.js') }}"></script>
 </body>
+
 </html>
