@@ -34,6 +34,7 @@ let selectedmembers = [];
 addExpenseBtn.addEventListener("click", () => {
   expenseForm.classList.remove("hidden");
   expenseBackdrop.classList.remove("hidden");
+  hideModalError(document.getElementById("expenseErrorBanner"));
 });
 
 function closeExpenseForm() {
@@ -164,10 +165,10 @@ saveExpenseBtn.addEventListener("click", () => {
   const shareType    = document.querySelector("input[name='shareType']:checked").value;
 
   // Original validation (unchanged)
-  if (!reason || !amount)                        { alert("Please enter both reason and amount."); return; }
-  if (amount <= 0)                               { alert("Please enter a valid amount."); return; }
-  if (!paidby || !members.includes(paidby))      { alert("Please enter a valid member name."); return; }
-  if (selectedmembers.length === 0)              { alert("Please select members."); return; }
+  if (!reason || !amount)                        { showModalError(document.getElementById("expenseErrorBanner"), "Please enter a reason and amount."); return; }
+  if (amount <= 0)                               { showModalError(document.getElementById("expenseErrorBanner"), "Amount must be greater than 0."); return; }
+  if (!paidby || !members.includes(paidby))      { showModalError(document.getElementById("expenseErrorBanner"), "Payer must be a member of this trip."); return; }
+  if (selectedmembers.length === 0)              { showModalError(document.getElementById("expenseErrorBanner"), "Please select at least one member."); return; }
 
   tempReason = reason;
   tempAmount = amount;
@@ -187,14 +188,13 @@ saveExpenseBtn.addEventListener("click", () => {
       .filter(v => !isNaN(v) && v >= 0);
 
     if (shares.length !== selectedmembers.length) {
-      alert("Please fill in all share amounts."); return;
+      showModalError(document.getElementById("sharesErrorBanner"), "Please fill in all share amounts."); return;
     }
 
     const total = roundTo(shares.reduce((sum, v) => sum + v, 0), 2);
     // ORIGINAL check: shares must match total amount exactly
     if (total !== roundTo(Number(tempAmount), 2)) {
-      alert(`Shares (₹${total.toFixed(2)}) don't match the total (₹${Number(tempAmount).toFixed(2)}).`);
-      return;
+      showModalError(document.getElementById("sharesErrorBanner"), `Shares total ₹${total.toFixed(2)} but expense is ₹${Number(tempAmount).toFixed(2)} — they must match.`); return;
     }
 
     addExpenseCard(tempReason, tempAmount, selectedmembers, shares, paidby);
@@ -224,12 +224,12 @@ async function addExpenseCard(reason, amount, members, shares, whopaid) {
       const expenseId = result.expense_id;
       buildExpenseCard(reason, amount, members, shares, whopaid, expenseId);
     } else if (result.status === "error") {
-      alert(`⚠ ${result.message || "Failed to save expense."}`);
+      showToast(result.message || 'Failed to save expense.', 'error');
     } else {
-      alert("⚠ Failed to save expense. Please try again.");
+      showToast('Failed to save expense. Please try again.', 'error');
     }
   } catch (error) {
-    alert("❌ Error connecting to server. Please check your connection.");
+    showToast('Connection error. Please check your network.', 'error');
   }
 }
 
@@ -281,7 +281,7 @@ billBtn.addEventListener("click", async () => {
     synopsisBackdrop.classList.remove("hidden");
   } catch (err) {
     console.error("Failed to fetch data:", err);
-    alert("❌ Could not retrieve data from server.");
+    showToast('Could not load spending data.', 'error');
   }
 });
 
@@ -386,7 +386,7 @@ function buildExpenseCard(reason, amount, memberNames, shares, whopaid, expenseI
         if (result.status === 'success') {
           card.remove();
         } else {
-          alert('⚠ ' + (result.message || 'Failed to delete expense.'));
+          showToast(result.message || 'Failed to delete expense.', 'error');
         }
       }
     );

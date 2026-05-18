@@ -161,6 +161,7 @@
     <div class="modal-step">STEP 3 OF 3</div>
     <h2 class="modal-title">Add members</h2>
     <p class="modal-hint">Alias is required. Username links them to their account.</p>
+    <div class="modal-error-banner" id="membersErrorBanner"></div>
     <form id="memberForm" class="name-form"></form>
     <div class="modal-actions">
       <button id="prevBtn" class="btn-ghost">← Back</button>
@@ -422,7 +423,7 @@
       // Creator row (idx 0): alias required
       const creatorAlias = aliasInputs[0].value.trim().toLowerCase();
       if (!creatorAlias) {
-        alert("Please enter your alias (row 1)."); return;
+        showModalError(document.getElementById("membersErrorBanner"), "Please enter your alias."); return;
       }
 
       // Additional rows: must have username OR alias (not both empty)
@@ -431,8 +432,7 @@
         const activeUsername = !userInputs[i].disabled  && userInputs[i].value.trim()  !== '';
         const activeAlias    = !aliasInputs[i].disabled && aliasInputs[i].value.trim() !== '';
         if (!activeUsername && !activeAlias) {
-          alert(`Row ${i + 1}: enter a username (app user) or an alias (non-app member).`);
-          return;
+          showModalError(document.getElementById("membersErrorBanner"), `Row ${i + 1}: enter a username or an alias.`); return;
         }
       }
 
@@ -446,7 +446,7 @@
 
       // Validate: no duplicate aliases
       if (new Set(allAliases).size !== allAliases.length) {
-        alert("Alias names must be unique."); return;
+        showModalError(document.getElementById("membersErrorBanner"), "Alias names must be unique."); return;
       }
 
       // Validate: no duplicate usernames among those provided
@@ -454,7 +454,7 @@
         .map(i => i.value.trim().toLowerCase())
         .filter(u => u !== '');
       if (new Set(usernames).size !== usernames.length) {
-        alert("Duplicate usernames are not allowed."); return;
+        showModalError(document.getElementById("membersErrorBanner"), "Each username can only be added once per trip."); return;
       }
 
       // Validate: non-creator username fields — if filled and not validated
@@ -466,9 +466,7 @@
           const checkList = await checkRes.json();
           const exact     = checkList.map(u => u.toLowerCase());
           if (!exact.includes(val.toLowerCase())) {
-            alert(`User "${val}" does not exist. Select from the dropdown or leave blank.`);
-            userInputs[i].focus();
-            return;
+            showModalError(document.getElementById("membersErrorBanner"), `User "${val}" does not exist. Select from the dropdown or leave blank.`); userInputs[i].focus(); return;
           }
           userInputs[i].dataset.validated = 'true';
         }
@@ -485,6 +483,7 @@
         is_creator: idx === 0
       }));
 
+      hideModalError(document.getElementById("membersErrorBanner"));
       saveMembersBtn.textContent = "Creating…";
       saveMembersBtn.disabled    = true;
 
@@ -499,7 +498,7 @@
       const data = await res.json();
 
       if (data.error) {
-        alert("Error: " + data.error);
+        showModalError(document.getElementById("membersErrorBanner"), data.error);
         saveMembersBtn.textContent = "Create Trip ✓";
         saveMembersBtn.disabled    = false;
         return;
@@ -569,7 +568,7 @@
           rowEl.style.opacity    = '0';
           setTimeout(() => rowEl.remove(), 300);
         } else {
-          alert('⚠ ' + (result.message || 'Action failed.'));
+          showToast(result.message || 'Action failed.', 'error');
         }
         hideHomeConfirm();
       };
@@ -634,7 +633,7 @@
         if (result.status === 'success') {
           window.location.reload();
         } else {
-          alert('⚠ ' + (result.message || 'Failed to accept invite.'));
+          showToast(result.message || 'Failed to accept invite.', 'error');
           btn.disabled    = false;
           btn.textContent = '✓ Join';
         }
@@ -662,10 +661,11 @@
             }
           }, 300);
         } else {
-          alert('⚠ ' + (result.message || 'Failed to reject invite.'));
+          showToast(result.message || 'Failed to reject invite.', 'error');
         }
       });
     });
   </script>
+  <script src="{{ url_for('static', filename='js/notify.js') }}"></script>
 </body>
 </html>

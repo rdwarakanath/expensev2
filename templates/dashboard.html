@@ -62,6 +62,7 @@
     </div>
 
     <div class="side-modal-body">
+      <div class="modal-error-banner" id="expenseErrorBanner"></div>
       <label class="field-label">Reason</label>
       <input type="text" id="expenseReason" class="field" placeholder="e.g. Dinner, Fuel, Hotel…" autocomplete="off" />
 
@@ -110,6 +111,7 @@
           <div class="splits-divider">
             <span class="splits-divider-label">Custom amounts</span>
           </div>
+          <div class="modal-error-banner" id="sharesErrorBanner"></div>
           <p class="splits-hint" id="splitsHint">Shares must add up to the total amount.</p>
           <form id="shareForm" class="inline-share-form"></form>
           <div class="splits-total-row">
@@ -164,6 +166,7 @@
   </div>
   <div class="modal-backdrop hidden" id="confirmBackdrop"></div>
 
+  <script src="{{ url_for('static', filename='js/notify.js') }}"></script>
   <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

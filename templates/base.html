@@ -65,6 +65,7 @@
       <div class="modal-step">STEP 3 OF 3</div>
       <h2 class="modal-title">Enter member names</h2>
       <p class="modal-hint">One name per person.</p>
+      <div class="modal-error-banner" id="baseErrorBanner"></div>
       <form id="memberForm" class="name-form"></form>
       <div class="modal-actions">
         <button id="prevBtn" class="btn-ghost">← Back</button>
@@ -158,10 +159,11 @@
     saveMembersBtn.addEventListener("click", async () => {
       const inputs  = document.querySelectorAll(".member-input");
       const members = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
-      if (members.length < count) { alert("Please fill in all member names."); return; }
+      if (members.length < count) { showModalError(document.getElementById("baseErrorBanner"), "Please fill in all member names."); return; }
       const lower = members.map(n => n.toLowerCase());
-      if (new Set(lower).size !== lower.length) { alert("Names must be unique."); return; }
+      if (new Set(lower).size !== lower.length) { showModalError(document.getElementById("baseErrorBanner"), "All member names must be unique."); return; }
 
+      hideModalError(document.getElementById("baseErrorBanner"));
       saveMembersBtn.textContent = "Creating…";
       saveMembersBtn.disabled = true;
 
@@ -178,7 +180,7 @@
       const data = await res.json();
 
       if (data.error) {
-        alert("Error: " + data.error);
+        showModalError(document.getElementById("baseErrorBanner"), data.error);
         saveMembersBtn.textContent = "Create Trip ✓";
         saveMembersBtn.disabled    = false;
         return;
@@ -203,5 +205,6 @@
       setTimeout(() => el.classList.remove("shake"), 500);
     }
   </script>
+  <script src="{{ url_for('static', filename='js/notify.js') }}"></script>
 </body>
 </html>
