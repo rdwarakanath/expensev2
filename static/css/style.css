@@ -1088,7 +1088,8 @@ body {
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   font-size: 0.95rem;
-  width: 34px; height: 34px;
+  width: auto; height: 34px;
+  min-width: 34px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
   transition: background 0.2s, color 0.2s, border-color 0.2s;

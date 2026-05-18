@@ -268,7 +268,7 @@ body {
   min-width: 100px;
 }
 .payer-side { flex: 1; }
-.recip-side { flex: 1; justify-content: flex-end; flex-direction: row-reverse; text-align: right; }
+.recip-side { flex: 1; justify-content: flex-start; flex-direction: row-reverse; text-align: right; }
 .settle-avatar {
   width: 36px; height: 36px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
