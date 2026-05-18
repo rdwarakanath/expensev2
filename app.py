@@ -1,18 +1,23 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
-import sqlite3
+import psycopg2
+import psycopg2.extras
+import os
 
 # ── DB helper ────────────────────────────────────────────────────────────────
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://postgres.lxvuzdktoabujubizsne:uB!#yE.j24*f_Uw@aws-1-ap-south-1.pooler.supabase.com:5432/postgres"
+)
+
 def get_db():
-    conn = sqlite3.connect("expense.db")
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
     return conn
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = "trip_secret_2025"
+app.secret_key = os.environ.get("SECRET_KEY", "trip_secret_2025")
 # Session stores: user_id, username only.
 # trip_id now lives in the URL, not the session.
 
@@ -49,7 +54,7 @@ def check_trip_access(trip_id, user_id, conn=None):
         SELECT t.id, t.trip_name, t.is_active, t.created_by
         FROM   trips      t
         JOIN   trip_users tu ON tu.trip_id = t.id
-        WHERE  t.id = ? AND tu.user_id = ? AND tu.status = 'accepted'
+        WHERE  t.id = %s AND tu.user_id = %s AND tu.status = 'accepted'
     """, (trip_id, user_id))
     row = cur.fetchone()
     if close_after:
@@ -65,7 +70,7 @@ def is_trip_creator(trip_id, user_id, conn=None):
         close_after = True
     cur = conn.cursor()
     cur.execute(
-        "SELECT id FROM trips WHERE id = ? AND created_by = ?",
+        "SELECT id FROM trips WHERE id = %s AND created_by = %s",
         (trip_id, user_id)
     )
     row = cur.fetchone()
@@ -84,11 +89,11 @@ def create_trip(trip_name, user_id):
     cur  = conn.cursor()
     # CHANGED: now stores user_id so trip belongs to a user
     cur.execute(
-        "INSERT INTO trips (trip_name, user_id, is_active) VALUES (?, ?, 1)",
+        "INSERT INTO trips (trip_name, created_by, is_active) VALUES (%s, %s, 1) RETURNING id",
         (trip_name, user_id)
     )
+    trip_id = cur.fetchone()['id']
     conn.commit()
-    trip_id = cur.lastrowid
     conn.close()
     return trip_id
 
@@ -99,7 +104,7 @@ def add_members_to_db(trip_id, members):
     cur  = conn.cursor()
     for m in members:
         cur.execute(
-            "INSERT INTO members (trip_id, name) VALUES (?, ?)",
+            "INSERT INTO members (trip_id, name) VALUES (%s, %s)",
             (trip_id, m)
         )
     conn.commit()
@@ -121,7 +126,7 @@ def process_expense(data, trip_id):
     cur  = conn.cursor()
 
     cur.execute(
-        "SELECT id FROM members WHERE trip_id = ? AND name = ?",
+        "SELECT id FROM members WHERE trip_id = %s AND name = %s",
         (trip_id, payer_name)
     )
     payer_row = cur.fetchone()
@@ -131,14 +136,14 @@ def process_expense(data, trip_id):
     payer_id = payer_row["id"]
 
     cur.execute(
-        "INSERT INTO expenses (trip_id, payer_id, amount, description) VALUES (?, ?, ?, ?)",
+        "INSERT INTO expenses (trip_id, payer_id, amount, description) VALUES (%s, %s, %s, %s) RETURNING id",
         (trip_id, payer_id, total, reason)
     )
-    expense_id = cur.lastrowid
+    expense_id = cur.fetchone()['id']
 
     for person_name, share in zip(sharemembers, shares):
         cur.execute(
-            "SELECT id FROM members WHERE trip_id = ? AND name = ?",
+            "SELECT id FROM members WHERE trip_id = %s AND name = %s",
             (trip_id, person_name)
         )
         member_row = cur.fetchone()
@@ -146,7 +151,7 @@ def process_expense(data, trip_id):
             conn.close()
             raise ValueError(f"Member '{person_name}' not found in trip {trip_id}")
         cur.execute(
-            "INSERT INTO expense_splits (expense_id, member_id, share_amount) VALUES (?, ?, ?)",
+            "INSERT INTO expense_splits (expense_id, member_id, share_amount) VALUES (%s, %s, %s)",
             (expense_id, member_row["id"], share)
         )
 
@@ -225,7 +230,7 @@ def calculate_results(trip_id):
     conn = get_db()
     cur  = conn.cursor()
 
-    cur.execute("SELECT id, name FROM members WHERE trip_id = ?", (trip_id,))
+    cur.execute("SELECT id, name FROM members WHERE trip_id = %s", (trip_id,))
     member_rows = cur.fetchall()
     if not member_rows:
         conn.close()
@@ -240,7 +245,7 @@ def calculate_results(trip_id):
         SELECT e.id, e.description, e.amount, m.name AS payer_name
         FROM   expenses e
         JOIN   members  m ON e.payer_id = m.id
-        WHERE  e.trip_id = ?
+        WHERE  e.trip_id = %s
         ORDER  BY e.created_at
     """, (trip_id,))
     expenses = cur.fetchall()
@@ -256,7 +261,7 @@ def calculate_results(trip_id):
             SELECT es.share_amount, m.name AS member_name
             FROM   expense_splits es
             JOIN   members        m  ON es.member_id = m.id
-            WHERE  es.expense_id = ?
+            WHERE  es.expense_id = %s
         """, (exp_id,))
         splits = cur.fetchall()
 
@@ -333,7 +338,7 @@ def login():
         else:
             conn = get_db()
             cur  = conn.cursor()
-            cur.execute("SELECT * FROM users WHERE username = ?", (username,))
+            cur.execute("SELECT * FROM users WHERE username = %s", (username,))
             user = cur.fetchone()
             conn.close()
 
@@ -371,7 +376,7 @@ def signup():
             cur  = conn.cursor()
             # Check username/email uniqueness
             cur.execute(
-                "SELECT id FROM users WHERE username = ? OR email = ?",
+                "SELECT id FROM users WHERE username = %s OR email = %s",
                 (username, email)
             )
             if cur.fetchone():
@@ -379,11 +384,11 @@ def signup():
                 conn.close()
             else:
                 cur.execute(
-                    "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+                    "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s) RETURNING id",
                     (username, email, generate_password_hash(password))
                 )
+                user_id = cur.fetchone()['id']
                 conn.commit()
-                user_id = cur.lastrowid
                 conn.close()
 
                 session.clear()
@@ -421,7 +426,7 @@ def home():
         SELECT t.id, t.trip_name, t.is_active, t.created_at, t.created_by
         FROM   trips      t
         JOIN   trip_users tu ON tu.trip_id = t.id
-        WHERE  tu.user_id = ? AND tu.status = 'accepted'
+        WHERE  tu.user_id = %s AND tu.status = 'accepted'
         ORDER  BY t.created_at DESC
     """, (user_id,))
     trips = [dict(r) for r in cur.fetchall()]
@@ -433,7 +438,7 @@ def home():
         FROM   trips      t
         JOIN   trip_users tu  ON tu.trip_id  = t.id
         JOIN   users      u   ON u.id        = t.created_by
-        WHERE  tu.user_id = ? AND tu.status = 'pending'
+        WHERE  tu.user_id = %s AND tu.status = 'pending'
         ORDER  BY t.created_at DESC
     """, (user_id,))
     pending_invites = [dict(r) for r in cur.fetchall()]
@@ -468,7 +473,7 @@ def search_users():
     cur  = conn.cursor()
     cur.execute("""
         SELECT username FROM users
-        WHERE  LOWER(username) LIKE ?
+        WHERE  LOWER(username) LIKE %s
         LIMIT  8
     """, (f'%{q}%',))
     results = [r['username'] for r in cur.fetchall()]
@@ -533,14 +538,14 @@ def create_trip_route():
     try:
         # 1. Insert trip
         cur.execute(
-            "INSERT INTO trips (trip_name, created_by, is_active) VALUES (?, ?, 1)",
+            "INSERT INTO trips (trip_name, created_by, is_active) VALUES (%s, %s, 1) RETURNING id",
             (trip_name, user_id)
         )
-        trip_id = cur.lastrowid
+        trip_id = cur.fetchone()['id']
 
         # 2. Insert creator into trip_users
         cur.execute(
-            "INSERT OR IGNORE INTO trip_users (trip_id, user_id) VALUES (?, ?)",
+            "INSERT INTO trip_users (trip_id, user_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (trip_id, user_id)
         )
 
@@ -553,31 +558,31 @@ def create_trip_route():
             if is_creator_row:
                 # Creator row — already in trip_users as accepted, add to members
                 cur.execute(
-                    "INSERT INTO members (trip_id, name, user_id) VALUES (?, ?, ?)",
+                    "INSERT INTO members (trip_id, name, user_id) VALUES (%s, %s, %s)",
                     (trip_id, alias, user_id)
                 )
             elif uname:
                 # Username provided — look up in users table
-                cur.execute("SELECT id FROM users WHERE LOWER(username) = ?", (uname,))
+                cur.execute("SELECT id FROM users WHERE LOWER(username) = %s", (uname,))
                 urow = cur.fetchone()
                 if urow:
                     member_uid = urow['id']
                     # Insert into trip_users as PENDING — NOT into members yet
                     cur.execute(
-                        "INSERT OR IGNORE INTO trip_users (trip_id, user_id, status) VALUES (?, ?, 'pending')",
+                        "INSERT INTO trip_users (trip_id, user_id, status) VALUES (%s, %s, 'pending') ON CONFLICT DO NOTHING",
                         (trip_id, member_uid)
                     )
                     # Do NOT insert into members — only added on invite acceptance
                 else:
                     # Username not found → treat as alias-only member
                     cur.execute(
-                        "INSERT INTO members (trip_id, name, user_id) VALUES (?, ?, NULL)",
+                        "INSERT INTO members (trip_id, name, user_id) VALUES (%s, %s, NULL)",
                         (trip_id, alias)
                     )
             else:
                 # No username — alias-only member, add directly to members
                 cur.execute(
-                    "INSERT INTO members (trip_id, name, user_id) VALUES (?, ?, NULL)",
+                    "INSERT INTO members (trip_id, name, user_id) VALUES (%s, %s, NULL)",
                     (trip_id, alias)
                 )
 
@@ -622,7 +627,7 @@ def dashboard(trip_id):
 
     conn = get_db()
     cur  = conn.cursor()
-    cur.execute("SELECT name FROM members WHERE trip_id = ?", (trip_id,))
+    cur.execute("SELECT name FROM members WHERE trip_id = %s", (trip_id,))
     members = [r["name"] for r in cur.fetchall()]
     conn.close()
 
@@ -694,7 +699,7 @@ def get_expenses(trip_id):
         SELECT e.id, e.description, e.amount, m.name AS payer_name
         FROM   expenses e
         JOIN   members  m ON e.payer_id = m.id
-        WHERE  e.trip_id = ?
+        WHERE  e.trip_id = %s
         ORDER  BY e.created_at
     """, (trip_id,))
     expenses = cur.fetchall()
@@ -706,7 +711,7 @@ def get_expenses(trip_id):
             SELECT m.name AS member_name, es.share_amount
             FROM   expense_splits es
             JOIN   members        m ON es.member_id = m.id
-            WHERE  es.expense_id = ?
+            WHERE  es.expense_id = %s
         """, (exp["id"],))
         splits = cur.fetchall()
 
@@ -736,7 +741,7 @@ def finish_trip(trip_id):
         return jsonify({"status": "error", "message": "Only the trip creator can finish this trip"}), 403
 
     cur.execute(
-        "UPDATE trips SET is_active = 0 WHERE id = ?",
+        "UPDATE trips SET is_active = 0 WHERE id = %s",
         (trip_id,)
     )
     conn.commit()
@@ -803,7 +808,7 @@ def accept_invite(trip_id):
     # Verify invite is actually pending for this user
     cur.execute("""
         SELECT status FROM trip_users
-        WHERE trip_id = ? AND user_id = ?
+        WHERE trip_id = %s AND user_id = %s
     """, (trip_id, user_id))
     row = cur.fetchone()
 
@@ -816,7 +821,7 @@ def accept_invite(trip_id):
 
     # Check alias uniqueness in this trip
     cur.execute(
-        "SELECT id FROM members WHERE trip_id = ? AND name = ?",
+        "SELECT id FROM members WHERE trip_id = %s AND name = %s",
         (trip_id, alias)
     )
     if cur.fetchone():
@@ -827,12 +832,12 @@ def accept_invite(trip_id):
         # Mark as accepted
         cur.execute("""
             UPDATE trip_users SET status = 'accepted'
-            WHERE trip_id = ? AND user_id = ?
+            WHERE trip_id = %s AND user_id = %s
         """, (trip_id, user_id))
 
         # Add to members table now that invite is accepted
         cur.execute(
-            "INSERT INTO members (trip_id, name, user_id) VALUES (?, ?, ?)",
+            "INSERT INTO members (trip_id, name, user_id) VALUES (%s, %s, %s)",
             (trip_id, alias, user_id)
         )
         conn.commit()
@@ -860,7 +865,7 @@ def reject_invite(trip_id):
 
     cur.execute("""
         SELECT status FROM trip_users
-        WHERE trip_id = ? AND user_id = ?
+        WHERE trip_id = %s AND user_id = %s
     """, (trip_id, user_id))
     row = cur.fetchone()
 
@@ -874,7 +879,7 @@ def reject_invite(trip_id):
     try:
         cur.execute("""
             UPDATE trip_users SET status = 'rejected'
-            WHERE trip_id = ? AND user_id = ?
+            WHERE trip_id = %s AND user_id = %s
         """, (trip_id, user_id))
         conn.commit()
     except Exception as e:
@@ -908,12 +913,12 @@ def delete_trip(trip_id):
     try:
         cur.execute("""
             DELETE FROM expense_splits
-            WHERE expense_id IN (SELECT id FROM expenses WHERE trip_id = ?)
+            WHERE expense_id IN (SELECT id FROM expenses WHERE trip_id = %s)
         """, (trip_id,))
-        cur.execute("DELETE FROM expenses WHERE trip_id = ?", (trip_id,))
-        cur.execute("DELETE FROM members WHERE trip_id = ?", (trip_id,))
-        cur.execute("DELETE FROM trip_users WHERE trip_id = ?", (trip_id,))
-        cur.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
+        cur.execute("DELETE FROM expenses WHERE trip_id = %s", (trip_id,))
+        cur.execute("DELETE FROM members WHERE trip_id = %s", (trip_id,))
+        cur.execute("DELETE FROM trip_users WHERE trip_id = %s", (trip_id,))
+        cur.execute("DELETE FROM trips WHERE id = %s", (trip_id,))
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -950,20 +955,20 @@ def leave_trip(trip_id):
         # Setting user_id = NULL means the alias stays in calculations
         # but the account no longer has login access to this trip.
         cur.execute(
-            "UPDATE members SET user_id = NULL WHERE trip_id = ? AND user_id = ?",
+            "UPDATE members SET user_id = NULL WHERE trip_id = %s AND user_id = %s",
             (trip_id, user_id)
         )
 
         # Remove login access — only trip_users row is deleted
         cur.execute(
-            "DELETE FROM trip_users WHERE trip_id = ? AND user_id = ?",
+            "DELETE FROM trip_users WHERE trip_id = %s AND user_id = %s",
             (trip_id, user_id)
         )
 
         # Check if anyone still has access (accepted users only)
         cur.execute("""
             SELECT COUNT(*) AS cnt FROM trip_users
-            WHERE trip_id = ? AND status = 'accepted'
+            WHERE trip_id = %s AND status = 'accepted'
         """, (trip_id,))
         remaining = cur.fetchone()['cnt']
 
@@ -973,12 +978,12 @@ def leave_trip(trip_id):
             # → trip_users (pending/rejected rows) → trip
             cur.execute("""
                 DELETE FROM expense_splits
-                WHERE expense_id IN (SELECT id FROM expenses WHERE trip_id = ?)
+                WHERE expense_id IN (SELECT id FROM expenses WHERE trip_id = %s)
             """, (trip_id,))
-            cur.execute("DELETE FROM expenses WHERE trip_id = ?", (trip_id,))
-            cur.execute("DELETE FROM members WHERE trip_id = ?", (trip_id,))
-            cur.execute("DELETE FROM trip_users WHERE trip_id = ?", (trip_id,))
-            cur.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
+            cur.execute("DELETE FROM expenses WHERE trip_id = %s", (trip_id,))
+            cur.execute("DELETE FROM members WHERE trip_id = %s", (trip_id,))
+            cur.execute("DELETE FROM trip_users WHERE trip_id = %s", (trip_id,))
+            cur.execute("DELETE FROM trips WHERE id = %s", (trip_id,))
 
         conn.commit()
     except Exception as e:
@@ -1009,7 +1014,7 @@ def delete_expense(expense_id):
         FROM   expenses   e
         JOIN   trips      t  ON e.trip_id  = t.id
         JOIN   trip_users tu ON tu.trip_id = t.id
-        WHERE  e.id = ? AND tu.user_id = ? AND tu.status = 'accepted'
+        WHERE  e.id = %s AND tu.user_id = %s AND tu.status = 'accepted'
     """, (expense_id, user_id))
     row = cur.fetchone()
 
@@ -1023,8 +1028,8 @@ def delete_expense(expense_id):
 
     try:
         # Delete splits first, then expense
-        cur.execute("DELETE FROM expense_splits WHERE expense_id = ?", (expense_id,))
-        cur.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+        cur.execute("DELETE FROM expense_splits WHERE expense_id = %s", (expense_id,))
+        cur.execute("DELETE FROM expenses WHERE id = %s", (expense_id,))
         conn.commit()
     except Exception as e:
         conn.rollback()
