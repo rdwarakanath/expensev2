@@ -197,6 +197,7 @@ def simplify_debts(balances):
 
     # Step 4: Greedy matching
     result = []
+    result1=[]
     i, j   = 0, 0
 
     while i < len(debtors) and j < len(creditors):
@@ -209,13 +210,14 @@ def simplify_debts(balances):
 
         settle = round(min(debt_amt, credit_amt), 2)
         result.append(f"{debtor} has to pay ₹{settle:.2f} to {creditor}")
-
+        result1.append((debtor, creditor,settle))
         debtors[i][1]   = round(debtors[i][1]   - settle, 2)
         creditors[j][1] = round(creditors[j][1] - settle, 2)
 
         if debtors[i][1]   < 0.01: i += 1
         if creditors[j][1] < 0.01: j += 1
-
+    result1.sort(key=lambda x: (x[0], x[1]))  
+    result = [f"{debtor} has to pay ₹{settle:.2f} to {creditor}" for debtor, creditor, settle in result1]
     return result
 
 
@@ -276,28 +278,28 @@ def calculate_results(trip_id):
     conn.close()
 
     printed     = set()
-    outputpayto = []
-
+    raw_pay_data=[]
     for p1 in balances:
         for p2 in balances[p1]:
             if (p2, p1) not in printed:
                 net = balances[p1][p2] - balances[p2][p1]
                 if net > 0:
-                    outputpayto.append(f"{p1} has to pay ₹{net:.2f} to {p2}")
+                    raw_pay_data.append((p1, p2, net))
                 elif net < 0:
-                    outputpayto.append(f"{p2} has to pay ₹{abs(net):.2f} to {p1}")
+                    raw_pay_data.append((p2, p1, abs(net)))
                 printed.add((p1, p2))
 
+    raw_pay_data.sort() 
     totspent = [f"{mem} : ₹{amt:.2f}" for mem, amt in total_spent.items()]
 
     transactions_final = [
         f"{t[0]} - ₹{t[1]:.2f} paid by {t[2]} -> splits: {t[3]}"
         for t in transactions
     ]
-
+    outputpayto = [f"{payer} has to pay ₹{amt:.2f} to {receiver}" 
+    for payer, receiver, amt in raw_pay_data]
     # Run greedy simplification on the same balances dict
     simplified = simplify_debts(balances)
-
     return outputpayto, simplified, totspent, transactions_final
 
 

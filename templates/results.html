@@ -1,15 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PayBait — Trip Summary</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"></noscript>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap"
+    rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap"
+      rel="stylesheet">
+  </noscript>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/results.css') }}" />
 </head>
+
 <body>
 
   <div class="bg-mesh">
@@ -30,9 +38,9 @@
       <!-- Status pill -->
       <div class="status-pill {% if 'no data' in message|lower %}pill-error{% else %}pill-ok{% endif %}">
         {% if 'no data' in message|lower %}
-          ⚠ No data available
+        ⚠ No data available
         {% else %}
-          ✓ Summary generated successfully
+        ✓ Summary generated successfully
         {% endif %}
       </div>
     </header>
@@ -71,14 +79,14 @@
       <div class="txn-list">
         {% for t in transactions %}
         {% set arrow_split = t.split(' -> ') %}
-        {% set main_info   = arrow_split[0] %}
+        {% set main_info = arrow_split[0] %}
         {% set splits_info = arrow_split[1] if arrow_split|length > 1 else '' %}
-        {% set dash_split  = main_info.split(' - ₹') %}
-        {% set reason      = dash_split[0] %}
-        {% set rest        = dash_split[1] if dash_split|length > 1 else '' %}
-        {% set paid_split  = rest.split(' paid by ') if rest else ['', ''] %}
-        {% set amount      = paid_split[0] %}
-        {% set paid_by     = paid_split[1] if paid_split|length > 1 else '' %}
+        {% set dash_split = main_info.split(' - ₹') %}
+        {% set reason = dash_split[0] %}
+        {% set rest = dash_split[1] if dash_split|length > 1 else '' %}
+        {% set paid_split = rest.split(' paid by ') if rest else ['', ''] %}
+        {% set amount = paid_split[0] %}
+        {% set paid_by = paid_split[1] if paid_split|length > 1 else '' %}
         <div class="txn-card" data-transaction="{{ t }}">
           <div class="txn-top">
             <div class="txn-left">
@@ -110,96 +118,137 @@
         <h2>Settlements</h2>
         <!-- Toggle buttons — always shown when there is trip data -->
         <div class="settle-toggle">
-          <button class="settle-toggle-btn active" id="btnOriginal"
-                  onclick="showSettle('original')">
+          <button class="settle-toggle-btn active" id="btnOriginal" onclick="showSettle('original')">
             Original
             <span class="settle-count">{{ payday|length }}</span>
           </button>
-          <button class="settle-toggle-btn" id="btnOptimized"
-                  onclick="showSettle('optimized')">
+          <button class="settle-toggle-btn" id="btnOptimized" onclick="showSettle('optimized')">
             Optimized ✦
             <span class="settle-count">{{ simplified|length if simplified else 0 }}</span>
           </button>
         </div>
       </div>
 
+      <!-- Member filter pills -->
+      <div class="member-filter-bar" id="memberFilterBar">
+        {% set members = [] %}
+        {% for p in payday %}
+        {% set parts = p.split(' has to pay ₹') %}
+        {% if parts|length > 1 %}
+        {% set payer = parts[0].strip() %}
+        {% set recip = parts[1].split(' to ')[1].strip() if ' to ' in parts[1] else '' %}
+        {% if payer and payer not in members %}{% set _ = members.append(payer) %}{% endif %}
+        {% if recip and recip not in members %}{% set _ = members.append(recip) %}{% endif %}
+        {% endif %}
+        {% endfor %}
+        {% for p in simplified if simplified %}
+        {% set parts = p.split(' has to pay ₹') %}
+        {% if parts|length > 1 %}
+        {% set payer = parts[0].strip() %}
+        {% set recip = parts[1].split(' to ')[1].strip() if ' to ' in parts[1] else '' %}
+        {% if payer and payer not in members %}{% set _ = members.append(payer) %}{% endif %}
+        {% if recip and recip not in members %}{% set _ = members.append(recip) %}{% endif %}
+        {% endif %}
+        {% endfor %}
+        {% for item in totspent %}
+        {% set mem = item.split(' : ')[0].strip() %}
+        {% if mem and mem not in members %}{% set _ = members.append(mem) %}{% endif %}
+        {% endfor %}
+        {% for mem in members %}
+        <button class="member-filter-btn" data-member="{{ mem }}" onclick="filterByMember('{{ mem }}')">
+          <span class="member-filter-av">{{ mem[0]|upper }}</span>
+          {{ mem }}
+        </button>
+        {% endfor %}
+      </div>
+
       <!-- Original settlements -->
       <div id="settleOriginal" class="settle-list">
         {% if payday %}
-          {% for p in payday %}
-          {% set paytext = p %}
-          {% set parts   = paytext.split(' has to pay ₹') %}
-          {% if parts|length > 1 %}
-            {% set payer  = parts[0].strip() %}
-            {% set rest2  = parts[1] %}
-            {% set ar     = rest2.split(' to ') %}
-            {% set amount = ar[0].strip() %}
-            {% set recip  = ar[1].strip() if ar|length > 1 else '' %}
-          {% else %}
-            {% set payer = '' %}{% set amount = '' %}{% set recip = '' %}
-          {% endif %}
-          {% if payer and recip and amount %}
-          <div class="settle-card">
-            <div class="settle-person payer-side">
-              <div class="settle-avatar payer-av">{{ payer[0]|upper }}</div>
-              <span class="settle-name">{{ payer }}</span>
-            </div>
-            <div class="settle-arrow">
-              <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
-                <path d="M1 7h28M23 1l7 6-7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span class="settle-amt">₹{{ amount }}</span>
-            </div>
-            <div class="settle-person recip-side">
-              <div class="settle-avatar recip-av">{{ recip[0]|upper }}</div>
-              <span class="settle-name">{{ recip }}</span>
-            </div>
-          </div>
-          {% endif %}
-          {% endfor %}
+        {% for p in payday %}
+        {% set paytext = p %}
+        {% set parts = paytext.split(' has to pay ₹') %}
+        {% if parts|length > 1 %}
+        {% set payer = parts[0].strip() %}
+        {% set rest2 = parts[1] %}
+        {% set ar = rest2.split(' to ') %}
+        {% set amount = ar[0].strip() %}
+        {% set recip = ar[1].strip() if ar|length > 1 else '' %}
         {% else %}
-          <div class="settle-zero">
-            <span class="settle-zero-icon">✓</span>
-            <p>No transactions needed — all balances cancel out perfectly.</p>
-          </div>
+        {% set payer = '' %}{% set amount = '' %}{% set recip = '' %}
         {% endif %}
+        {% if payer and recip and amount %}
+        <div class="settle-card" data-payer="{{ payer }}" data-recip="{{ recip }}">
+          <div class="settle-person payer-side">
+            <div class="settle-avatar payer-av">{{ payer[0]|upper }}</div>
+            <span class="settle-name">{{ payer }}</span>
+          </div>
+          <div class="settle-arrow">
+            <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
+              <path d="M1 7h28M23 1l7 6-7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+            <span class="settle-amt">₹{{ amount }}</span>
+          </div>
+          <div class="settle-person recip-side">
+            <div class="settle-avatar recip-av">{{ recip[0]|upper }}</div>
+            <span class="settle-name">{{ recip }}</span>
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        <div class="settle-zero">
+          <span class="settle-zero-icon">✓</span>
+          <p>No transactions needed — all balances cancel out perfectly.</p>
+        </div>
+        {% endif %}
+        <div class="settle-member-empty" id="emptyMsgOriginal" style="display:none">
+          <span class="settle-empty-icon">🔍</span>
+          <p>No settlements found for this member.</p>
+        </div>
       </div>
 
       <!-- Optimized settlements (hidden by default) -->
       <div id="settleOptimized" class="settle-list" style="display:none">
         {% if simplified %}
-          {% for p in simplified %}
-          {% set parts  = p.split(' has to pay ₹') %}
-          {% set payer  = parts[0].strip() %}
-          {% set rest2  = parts[1] %}
-          {% set ar     = rest2.split(' to ') %}
-          {% set amount = ar[0].strip() %}
-          {% set recip  = ar[1].strip() if ar|length > 1 else '' %}
-          {% if payer and recip and amount %}
-          <div class="settle-card settle-card-optimized">
-            <div class="settle-person payer-side">
-              <div class="settle-avatar payer-av">{{ payer[0]|upper }}</div>
-              <span class="settle-name">{{ payer }}</span>
-            </div>
-            <div class="settle-arrow">
-              <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
-                <path d="M1 7h28M23 1l7 6-7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span class="settle-amt">₹{{ amount }}</span>
-            </div>
-            <div class="settle-person recip-side">
-              <div class="settle-avatar recip-av">{{ recip[0]|upper }}</div>
-              <span class="settle-name">{{ recip }}</span>
-            </div>
+        {% for p in simplified %}
+        {% set parts = p.split(' has to pay ₹') %}
+        {% set payer = parts[0].strip() %}
+        {% set rest2 = parts[1] %}
+        {% set ar = rest2.split(' to ') %}
+        {% set amount = ar[0].strip() %}
+        {% set recip = ar[1].strip() if ar|length > 1 else '' %}
+        {% if payer and recip and amount %}
+        <div class="settle-card settle-card-optimized" data-payer="{{ payer }}" data-recip="{{ recip }}">
+          <div class="settle-person payer-side">
+            <div class="settle-avatar payer-av">{{ payer[0]|upper }}</div>
+            <span class="settle-name">{{ payer }}</span>
           </div>
-          {% endif %}
-          {% endfor %}
-        {% else %}
-          <div class="settle-zero">
-            <span class="settle-zero-icon">✓</span>
-            <p>No transactions needed — all balances cancel out perfectly.</p>
+          <div class="settle-arrow">
+            <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
+              <path d="M1 7h28M23 1l7 6-7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+            <span class="settle-amt">₹{{ amount }}</span>
           </div>
+          <div class="settle-person recip-side">
+            <div class="settle-avatar recip-av">{{ recip[0]|upper }}</div>
+            <span class="settle-name">{{ recip }}</span>
+          </div>
+        </div>
         {% endif %}
+        {% endfor %}
+        {% else %}
+        <div class="settle-zero">
+          <span class="settle-zero-icon">✓</span>
+          <p>No transactions needed — all balances cancel out perfectly.</p>
+        </div>
+        {% endif %}
+        <div class="settle-member-empty" id="emptyMsgOptimized" style="display:none">
+          <span class="settle-empty-icon">🔍</span>
+          <p>No settlements found for this member.</p>
+        </div>
       </div>
     </section>
     {% endif %}
@@ -211,24 +260,80 @@
   </div><!-- /results-wrap -->
 
   <script>
+    // Currently active member filter (null = show all)
+    let activeMember = null;
+    let currentMode = 'original';
+
     // Toggle between original and optimized settlements
     function showSettle(mode) {
-      const original  = document.getElementById('settleOriginal');
+      const original = document.getElementById('settleOriginal');
       const optimized = document.getElementById('settleOptimized');
-      const btnOrig   = document.getElementById('btnOriginal');
-      const btnOpt    = document.getElementById('btnOptimized');
+      const btnOrig = document.getElementById('btnOriginal');
+      const btnOpt = document.getElementById('btnOptimized');
+
+      currentMode = mode;
 
       if (mode === 'original') {
-        original.style.display  = '';
+        original.style.display = '';
         optimized.style.display = 'none';
         btnOrig.classList.add('active');
         btnOpt.classList.remove('active');
       } else {
-        original.style.display  = 'none';
+        original.style.display = 'none';
         optimized.style.display = '';
         btnOrig.classList.remove('active');
         btnOpt.classList.add('active');
       }
+      // Re-apply member filter after toggling mode
+      applyMemberFilter(activeMember);
+    }
+
+    // Filter settlement cards by member name
+    function filterByMember(member) {
+      const btns = document.querySelectorAll('.member-filter-btn');
+      if (activeMember === member) {
+        // Clicking the same button deselects it → show all
+        activeMember = null;
+        btns.forEach(b => b.classList.remove('active'));
+      } else {
+        activeMember = member;
+        btns.forEach(b => {
+          b.classList.toggle('active', b.dataset.member === member);
+        });
+      }
+      applyMemberFilter(activeMember);
+    }
+
+    function applyMemberFilter(member) {
+      ['settleOriginal', 'settleOptimized'].forEach(listId => {
+        const list = document.getElementById(listId);
+        if (!list) return;
+        const suffix = listId === 'settleOriginal' ? 'Original' : 'Optimized';
+        const emptyMsg = document.getElementById('emptyMsg' + suffix);
+        const cards = list.querySelectorAll('.settle-card');
+
+        if (!member) {
+          // No filter — show everything, hide empty message
+          cards.forEach(c => c.style.display = '');
+          if (emptyMsg) emptyMsg.style.display = 'none';
+          return;
+        }
+
+        // Only operate on the currently visible list
+        const isVisible = list.style.display !== 'none';
+        let visibleCount = 0;
+        cards.forEach(c => {
+          const payer = (c.dataset.payer || '').toLowerCase();
+          const recip = (c.dataset.recip || '').toLowerCase();
+          const match = payer === member.toLowerCase() || recip === member.toLowerCase();
+          c.style.display = match ? '' : 'none';
+          if (match) visibleCount++;
+        });
+
+        if (emptyMsg) {
+          emptyMsg.style.display = visibleCount === 0 && isVisible ? 'flex' : 'none';
+        }
+      });
     }
 
     // Parse and render split breakdowns
@@ -245,7 +350,7 @@
         if (matches.length === 0) {
           const alt = /\[([^,\]]+),\s*([\d.]+)\]/g;
           while ((m = alt.exec(raw)) !== null) {
-            matches.push({ person: m[1].replace(/['"]/g,'').trim(), amount: parseFloat(m[2]) });
+            matches.push({ person: m[1].replace(/['"]/g, '').trim(), amount: parseFloat(m[2]) });
           }
         }
         grid.innerHTML = '';
@@ -261,4 +366,5 @@
     });
   </script>
 </body>
+
 </html>
