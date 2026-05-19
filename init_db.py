@@ -74,6 +74,15 @@ CREATE TABLE IF NOT EXISTS expense_splits (
 )
 """)
 
+cur.execute("CREATE INDEX IF NOT EXISTS idx_trip_users_user_id ON trip_users(user_id)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_trip_users_trip_id ON trip_users(trip_id)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_members_trip_id ON members(trip_id)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_members_user_id ON members(user_id)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_expenses_trip_id ON expenses(trip_id)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_expenses_payer_id ON expenses(payer_id)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_expense_splits_expense_id ON expense_splits(expense_id)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_expense_splits_member_id ON expense_splits(member_id)")
+
 conn.commit()
 cur.close()
 conn.close()
