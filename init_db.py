@@ -1,10 +1,8 @@
 import psycopg2
 import os
-
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://postgres.lxvuzdktoabujubizsne:uB!#yE.j24*f_Uw@aws-1-ap-south-1.pooler.supabase.com:5432/postgres"
-)
+from dotenv import load_dotenv
+load_dotenv()
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 conn = psycopg2.connect(DATABASE_URL)
 cur  = conn.cursor()

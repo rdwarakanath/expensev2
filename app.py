@@ -4,12 +4,10 @@ from functools import wraps
 import psycopg2
 import psycopg2.extras
 import os
-
+from dotenv import load_dotenv
+load_dotenv()
 # ── DB helper ────────────────────────────────────────────────────────────────
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://postgres.lxvuzdktoabujubizsne:uB!#yE.j24*f_Uw@aws-1-ap-south-1.pooler.supabase.com:5432/postgres"
-)
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db():
     conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
@@ -17,7 +15,7 @@ def get_db():
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "trip_secret_2025")
+app.secret_key = os.environ.get("SECRET_KEY")
 # Session stores: user_id, username only.
 # trip_id now lives in the URL, not the session.
 
