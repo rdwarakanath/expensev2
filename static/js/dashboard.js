@@ -41,6 +41,8 @@ function closeExpenseForm() {
   expenseForm.classList.add("hidden");
   expenseBackdrop.classList.add("hidden");
   collapseCustomSplits();
+  hideModalError(document.getElementById("expenseErrorBanner"));
+  hideModalError(document.getElementById("sharesErrorBanner"));
 }
 cancelExpenseBtn.addEventListener("click", closeExpenseForm);
 
@@ -87,6 +89,7 @@ function expandCustomSplits() {
   rebuildCustomInputs();
   customSplitsSection.classList.remove("collapsed");
   customSplitsSection.classList.add("expanded");
+  hideModalError(document.getElementById("sharesErrorBanner"));
 }
 
 function collapseCustomSplits() {
@@ -168,6 +171,29 @@ document.getElementById("expenseAmount").addEventListener("input", () => {
   if (isCustomMode()) rebuildCustomInputs();
 });
 
+// ── Reason field: only alphanumerics and spaces allowed ──────────────────
+// Strips any special character (including _) as the user types
+document.getElementById("expenseReason").addEventListener("input", (e) => {
+  const cleaned = e.target.value.replace(/[^a-zA-Z0-9 ]/g, "");
+  if (cleaned !== e.target.value) {
+    e.target.value = cleaned;
+  }
+  hideModalError(document.getElementById("expenseErrorBanner"));
+});
+
+// ── Clear expenseErrorBanner when user interacts with any expense field ───
+["expenseAmount", "paidby"].forEach(id => {
+  document.getElementById(id).addEventListener("input", () => {
+    hideModalError(document.getElementById("expenseErrorBanner"));
+  });
+});
+// Clear on member checkbox change too
+document.querySelectorAll('input[name="members"]').forEach(cb => {
+  cb.addEventListener("change", () => {
+    hideModalError(document.getElementById("expenseErrorBanner"));
+  });
+});
+
 // ── Save expense (ORIGINAL validation — unchanged) ────────────────────────
 saveExpenseBtn.addEventListener("click", () => {
   const reason    = document.getElementById("expenseReason").value.trim();
@@ -177,8 +203,9 @@ saveExpenseBtn.addEventListener("click", () => {
   selectedmembers    = Array.from(checkedBoxes).map(cb => cb.value);
   const shareType    = document.querySelector("input[name='shareType']:checked").value;
 
-  // Original validation (unchanged)
+  // Validation
   if (!reason || !amount)                        { showModalError(document.getElementById("expenseErrorBanner"), "Please enter a reason and amount."); return; }
+  if (!/^[a-zA-Z0-9 ]+$/.test(reason))          { showModalError(document.getElementById("expenseErrorBanner"), "Reason can only contain letters, numbers and spaces."); return; }
   if (amount <= 0)                               { showModalError(document.getElementById("expenseErrorBanner"), "Amount must be greater than 0."); return; }
   if (!paidby || !members.includes(paidby))      { showModalError(document.getElementById("expenseErrorBanner"), "Payer must be a member of this trip."); return; }
   if (selectedmembers.length === 0)              { showModalError(document.getElementById("expenseErrorBanner"), "Please select at least one member."); return; }
@@ -202,6 +229,9 @@ saveExpenseBtn.addEventListener("click", () => {
 
     if (shares.length !== selectedmembers.length) {
       showModalError(document.getElementById("sharesErrorBanner"), "Please fill in all share amounts."); return;
+    }
+    if (shares.some(v => v <= 0)) {
+      showModalError(document.getElementById("sharesErrorBanner"), "Each share amount must be greater than 0."); return;
     }
 
     const total = roundTo(shares.reduce((sum, v) => sum + v, 0), 2);
