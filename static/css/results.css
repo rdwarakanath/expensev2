@@ -516,21 +516,101 @@ body {
     padding: 40px 16px 60px;
   }
 
-  .settle-card {
-    flex-wrap: wrap;
+  .spent-grid {
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
 
-  .settle-arrow {
-    width: 100%;
-    flex-direction: row;
-    justify-content: center;
+  .spent-card {
+    padding: 10px 12px;
+    gap: 8px;
   }
 
-  .recip-side {
-    justify-content: flex-start;
-    flex-direction: row;
-    text-align: left;
+  .spent-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.8rem;
+  }
+
+  .spent-name {
+    font-size: 0.82rem;
+  }
+
+  .spent-amount {
+    font-size: 0.9rem;
+  }
+
+  .splits-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .split-chip {
+    padding: 4px 6px;
+    gap: 4px;
+    font-size: 0.75rem;
+    min-width: 0;
+  }
+
+  .chip-av {
+    width: 18px;
+    height: 18px;
+    font-size: 0.6rem;
+  }
+
+  .chip-name {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .chip-amt {
+    flex-shrink: 0;
+  }
+
+  .results-section {
+    padding: 20px 16px;
+  }
+
+  .settle-card {
+    flex-wrap: nowrap;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .settle-person {
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .settle-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+
+  .settle-name {
+    font-size: 0.8rem;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .settle-arrow {
+    flex-shrink: 0;
+    gap: 2px;
+  }
+
+  .settle-arrow svg {
+    width: 24px;
+    height: 10px;
+  }
+
+  .settle-amt {
+    font-size: 0.8rem;
   }
 }
 

@@ -1667,19 +1667,29 @@ body {
   /* Member entry v2 — stack alias/username vertically */
   .member-entry-v2 {
     grid-template-columns: 24px 1fr;
+    row-gap: 4px;
   }
   .member-entry-v2 .member-field-group:last-child {
     grid-column: 2;
+  }
+  .field-inline-hint:empty {
+    display: none;
   }
 
   /* ── Dashboard topbar — single row ────────────────────── */
   .dashboard-body .topbar { padding: 10px 12px; gap: 6px; }
   .dashboard-body .topbar-title {
-    font-size: 0.85rem;
-    max-width: 110px;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.88rem;
+    max-width: 130px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  #billBtn {
+    display: none !important;
   }
   /* Hide desktop Add Expense button — FAB replaces it */
   .btn-add { display: none; }
