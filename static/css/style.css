@@ -1566,3 +1566,199 @@ body {
   animation: fadeUp 0.15s ease;
 }
 .modal-error-banner.visible { display: block; }
+
+/* ============================================================
+   MOBILE — max-width 640px
+   Pure additions. Nothing above modified.
+   ============================================================ */
+@media (max-width: 640px) {
+
+  /* ── Auth: login / signup ──────────────────────────────── */
+  .stage {
+    align-items: flex-start;
+    padding: 32px 16px;
+  }
+  .auth-card {
+    padding: 28px 20px;
+    max-width: 100%;
+    border-radius: var(--radius-md);
+  }
+  .auth-title { font-size: 1.5rem; }
+
+  /* ── Home navbar ───────────────────────────────────────── */
+  /* Single row — brand left, user+logout right, compact */
+  .topbar { padding: 10px 14px; }
+  .topbar-title { font-size: 0.9rem; letter-spacing: 0.03em; }
+  .topbar-user {
+    font-size: 0.75rem;
+    max-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .topbar-logout { font-size: 0.74rem; padding: 5px 10px; }
+
+  /* ── Home layout — single column stacked ──────────────── */
+  .home-layout {
+    flex-direction: column;
+    padding: 68px 14px 40px;
+    gap: 16px;
+  }
+  .home-layout .home-wrap { width: 100%; padding: 0; }
+
+  /* Greeting row */
+  .home-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .home-title { font-size: 1.45rem; }
+
+  /* New trip button — full width */
+  .cta-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 13px;
+    font-size: 0.92rem;
+  }
+
+  /* Invites panel — full width, max 260px tall, above trips */
+  .invites-panel {
+    width: 100%;
+    position: static;
+    max-height: 260px;
+    border-radius: var(--radius-md);
+    order: -1;          /* ensures panel appears before trip list */
+  }
+
+  /* Trip rows — two-row layout */
+  .trip-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .trip-row-left  { width: 100%; }
+  .trip-row-right {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .trip-row-name { font-size: 0.9rem; }
+  .trip-row-date { font-size: 0.72rem; }
+  .trip-badge    { font-size: 0.68rem; padding: 3px 8px; }
+  .trip-btn      { font-size: 0.76rem; padding: 6px 12px; }
+  .trip-delete-btn { min-width: 30px; height: 30px; font-size: 0.85rem; }
+  .trip-leave-btn  { font-size: 0.72rem; padding: 5px 10px; }
+
+  /* Home modals (new trip flow) */
+  #tripBox, #memberCountBox, #memberNamesBox {
+    width: calc(100% - 28px);
+    max-width: 100%;
+    padding: 24px 16px;
+  }
+  .modal-title { font-size: 1.25rem; }
+  .name-form   { max-height: 200px; }
+
+  /* Member entry v2 — stack alias/username vertically */
+  .member-entry-v2 {
+    grid-template-columns: 24px 1fr;
+  }
+  .member-entry-v2 .member-field-group:last-child {
+    grid-column: 2;
+  }
+
+  /* ── Dashboard topbar — single row ────────────────────── */
+  .dashboard-body .topbar { padding: 10px 12px; gap: 6px; }
+  .dashboard-body .topbar-title {
+    font-size: 0.85rem;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Hide desktop Add Expense button — FAB replaces it */
+  .btn-add { display: none; }
+  .btn-finish { font-size: 0.74rem; padding: 6px 10px; }
+
+  /* ── Floating action buttons (mobile only) ─────────────── */
+  .fab-container {
+    position: fixed;
+    bottom: 24px;
+    right: 18px;
+    z-index: 150;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .fab-btn {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+    transition: transform 0.2s, box-shadow 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .fab-btn:active { transform: scale(0.94); }
+  .fab-add    { background: var(--amber); color: #000; }
+  .fab-wallet {
+    background: rgba(14,17,26,0.95);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+
+  /* ── Expense grid — 2 columns ─────────────────────────── */
+  .feed-area {
+    padding: 16px 10px 100px;  /* bottom clears FABs */
+  }
+  .expense-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .expense-card { padding: 12px 10px; }
+  .expense-card strong { font-size: 0.82rem; }
+
+  /* Expense side-modal — slides up from bottom full width */
+  .side-modal {
+    top: 0;
+    width: 100%;
+    border-left: none;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    animation: slideUp 0.28s cubic-bezier(0.34,1.2,0.64,1);
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+
+  /* Center modals — full width */
+  .center-modal { width: calc(100% - 28px); }
+
+  /* Toast — bottom of screen on mobile */
+  #toast-container {
+    top: auto;
+    bottom: 90px;
+    right: 14px;
+    left: 14px;
+  }
+  .toast { max-width: 100%; }
+
+  /* Synopsis modal content */
+  .synopsis-list { max-height: 55vh; }
+}
+
+/* Desktop: hide FAB container */
+@media (min-width: 641px) {
+  .fab-container { display: none; }
+}

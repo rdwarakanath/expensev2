@@ -463,4 +463,17 @@ async function loadExistingExpenses() {
 
 loadExistingExpenses();
 
+// ── FAB buttons — wire to existing handlers (mobile only) ───────────────
+// fabAddBtn triggers the same flow as the desktop "+ Add Expense" button
+// fabWalletBtn triggers the same flow as the desktop wallet icon
+const fabAddBtn    = document.getElementById('fabAddBtn');
+const fabWalletBtn = document.getElementById('fabWalletBtn');
+
+if (fabAddBtn) {
+  fabAddBtn.addEventListener('click', () => addExpenseBtn.click());
+}
+if (fabWalletBtn) {
+  fabWalletBtn.addEventListener('click', () => billBtn.click());
+}
+
 }); // end DOMContentLoaded
