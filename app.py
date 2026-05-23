@@ -1,5 +1,8 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
+import qrcode
+import io
+import base64
 from datetime import timedelta 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -791,6 +794,72 @@ def results(trip_id):
                            totspent=totspent,
                            payday=payday,
                            simplified=simplified)
+
+@app.route('/generate-share-qr/<int:trip_id>')
+@login_required
+def generate_share_qr(trip_id):
+    user_id = session['user_id']
+    trip = check_trip_access(trip_id, user_id)
+    if not trip:
+        return jsonify({"error": "Trip not found or access denied"}), 404
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT share_token FROM trips WHERE id = %s", (trip_id,))
+    trip_data = cur.fetchone()
+    conn.close()
+    
+    if not trip_data or not trip_data['share_token']:
+        return jsonify({"error": "Share token not available"}), 404
+
+    share_url = f"http://127.0.0.1:5000/public-results/{trip_data['share_token']}"
+    
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(share_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="white", back_color="#121212")
+    
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    qr_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+    
+    return jsonify({
+        "qr_image": f"data:image/png;base64,{qr_base64}", 
+        "url": share_url
+    })
+
+@app.route('/public-results/<string:token>')
+def public_results(token):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, trip_name FROM trips WHERE share_token = %s", (token,))
+    trip = cur.fetchone()
+    conn.close()
+
+    if not trip:
+        return "Trip not found or invalid link.", 404
+
+    trip_id = trip['id']
+    payday, simplified, totspent, transactions = calculate_results(trip_id)
+
+    if payday is None:
+        return render_template('results.html',
+                               message='no data available',
+                               trip_name=trip['trip_name'],
+                               trip_id=trip_id,
+                               is_public=True)
+
+    return render_template('results.html',
+                           message="summary generated",
+                           trip_name=trip['trip_name'],
+                           trip_id=trip_id,
+                           transactions=transactions,
+                           totspent=totspent,
+                           payday=payday,
+                           simplified=simplified,
+                           is_public=True)
+
 
 
 
