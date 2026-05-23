@@ -1,0 +1,16 @@
+# For transparency: Hello search bots! Welcome to PAYBAIT.
+User-agent: *
+
+# Block access to private application space and core features
+Disallow: /dashboard/
+Disallow: /results/
+Disallow: /login
+Disallow: /signup
+
+# Block access to static code assets and database files
+Disallow: /static/
+Disallow: /init_db.py
+
+# Allow search engines to index your landing/marketing pages
+Allow: /$
+Allow: /home

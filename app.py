@@ -1,5 +1,8 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import timedelta 
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from functools import wraps
 import psycopg2
 import psycopg2.extras
@@ -16,9 +19,16 @@ def get_db():
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY")
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 # Session stores: user_id, username only.
 # trip_id now lives in the URL, not the session.
-
+limiter = Limiter(
+    get_remote_address,               # Identifies users by their IP address
+    app=app,
+    default_limits=["200 per day"],   # Global fallback limit for all routes
+    storage_uri="memory://"           # Keeps limits in server memory (fast & simple)
+)
 
 # =========================================================
 # ── AUTH DECORATOR ────────────────────────────────────────
@@ -324,6 +334,7 @@ def index():
 
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
 def login():
     if "user_id" in session:
         return redirect(url_for("home"))
@@ -346,6 +357,7 @@ def login():
                 error = "Invalid username or password."
             else:
                 session.clear()
+                session.permanent = True
                 session['user_id']  = user['id']
                 session['username'] = user['username']
                 return redirect(url_for("home"))
@@ -354,6 +366,7 @@ def login():
 
 
 @app.route('/signup', methods=['GET', 'POST'])
+@limiter.limit("3 per minute")
 def signup():
     if "user_id" in session:
         return redirect(url_for("home"))
@@ -1039,6 +1052,32 @@ def delete_expense(expense_id):
         conn.close()
 
     return jsonify({"status": "success"})
+
+@app.route('/robots.txt')
+def robots_txt():
+    return send_from_directory(app.static_folder, 'robots.txt')
+
+# ── Error Handlers ────────────────────────────────────────────────────────────
+
+@app.errorhandler(400)
+def bad_request(e):
+    # We pass the 400 status code explicitly at the end
+    return render_template('400.html'), 400
+
+@app.errorhandler(404)
+def page_not_found(e):
+    # We pass the 404 status code explicitly at the end
+    return render_template('404.html'), 404
+
+@app.errorhandler(429)
+def too_many_requests(e):
+    # We pass the 429 status code explicitly at the end
+    return render_template('429.html'), 429
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    # We pass the 500 status code explicitly at the end
+    return render_template('500.html'), 500
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
