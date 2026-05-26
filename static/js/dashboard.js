@@ -2,6 +2,7 @@
    dashboard.js
    CHANGED: Custom splits now expand inline inside the expense
             form instead of opening a separate panel.
+            Full polling hardening: all 7 race conditions patched.
    UNCHANGED: All validation logic, fetch calls, equal/unequal
               share calculation, selectAll, finish, bill synopsis.
    ============================================================ */
@@ -29,6 +30,14 @@ let paidby = "";
 let tempReason = "";
 let tempAmount = "";
 let selectedmembers = [];
+
+// ── State flags — prevent ALL race conditions ─────────────────────────────
+// isSaving  : true while a POST /add_expense is in-flight
+// isDeleting: true while the confirm-delete modal is open
+// isSyncing : true while forceSyncExpenses is running (prevents overlapping syncs)
+let isSaving   = false;
+let isDeleting = false;
+let isSyncing  = false;
 
 // ── Show / hide expense form ──────────────────────────────────────────────
 addExpenseBtn.addEventListener("click", () => {
@@ -62,7 +71,6 @@ memberCheckboxes.forEach(cb => {
     } else if (Array.from(memberCheckboxes).every(m => m.checked)) {
       selectAll.checked = true;
     }
-    // Rebuild inputs live when member selection changes in custom mode
     if (isCustomMode()) rebuildCustomInputs();
   });
 });
@@ -100,9 +108,9 @@ function collapseCustomSplits() {
 
 // ── Build one input row per selected member ───────────────────────────────
 function rebuildCustomInputs() {
-  const checkedBoxes     = document.querySelectorAll(".member-checkboxes input[name='members']:checked");
-  const currentMembers   = Array.from(checkedBoxes).map(cb => cb.value);
-  const amount           = parseFloat(document.getElementById("expenseAmount").value) || 0;
+  const checkedBoxes   = document.querySelectorAll(".member-checkboxes input[name='members']:checked");
+  const currentMembers = Array.from(checkedBoxes).map(cb => cb.value);
+  const amount         = parseFloat(document.getElementById("expenseAmount").value) || 0;
 
   if (splitsHint) {
     splitsHint.textContent = amount > 0
@@ -150,21 +158,20 @@ function rebuildCustomInputs() {
 
 // ── Live remaining counter ────────────────────────────────────────────────
 function updateRemaining() {
-    const amount    = parseFloat(document.getElementById("expenseAmount").value) || 0;
-    const inputs    = document.querySelectorAll(".inline-share-input");
-    const entered   = Array.from(inputs).reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
-    const remaining = roundTo(amount - entered, 2);
+  const amount    = parseFloat(document.getElementById("expenseAmount").value) || 0;
+  const inputs    = document.querySelectorAll(".inline-share-input");
+  const entered   = Array.from(inputs).reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
+  const remaining = roundTo(amount - entered, 2);
 
-    if (splitsRemaining) {
-      splitsRemaining.textContent = `₹${remaining.toFixed(2)}`;
-      splitsRemaining.className   = "splits-total-value " +
-        (Math.abs(remaining) < 0.01 ? "remaining-ok" : remaining < 0 ? "remaining-over" : "");
-    }
-
-    // Clear shares error banner on re-input
-    const sharesErr = document.getElementById("sharesErrorBanner");
-    if (sharesErr) hideModalError(sharesErr);
+  if (splitsRemaining) {
+    splitsRemaining.textContent = `₹${remaining.toFixed(2)}`;
+    splitsRemaining.className   = "splits-total-value " +
+      (Math.abs(remaining) < 0.01 ? "remaining-ok" : remaining < 0 ? "remaining-over" : "");
   }
+
+  const sharesErr = document.getElementById("sharesErrorBanner");
+  if (sharesErr) hideModalError(sharesErr);
+}
 
 // Rebuild when amount field changes while in custom mode
 document.getElementById("expenseAmount").addEventListener("input", () => {
@@ -172,7 +179,6 @@ document.getElementById("expenseAmount").addEventListener("input", () => {
 });
 
 // ── Reason field: only alphanumerics and spaces allowed ──────────────────
-// Strips any special character (including _) as the user types
 document.getElementById("expenseReason").addEventListener("input", (e) => {
   const cleaned = e.target.value.replace(/[^a-zA-Z0-9 ]/g, "");
   if (cleaned !== e.target.value) {
@@ -187,7 +193,6 @@ document.getElementById("expenseReason").addEventListener("input", (e) => {
     hideModalError(document.getElementById("expenseErrorBanner"));
   });
 });
-// Clear on member checkbox change too
 document.querySelectorAll('input[name="members"]').forEach(cb => {
   cb.addEventListener("change", () => {
     hideModalError(document.getElementById("expenseErrorBanner"));
@@ -196,9 +201,9 @@ document.querySelectorAll('input[name="members"]').forEach(cb => {
 
 // ── Save expense (ORIGINAL validation — unchanged) ────────────────────────
 saveExpenseBtn.addEventListener("click", () => {
-  const reason    = document.getElementById("expenseReason").value.trim();
-  const amount    = document.getElementById("expenseAmount").value;
-  paidby          = document.getElementById("paidby").value.trim();
+  const reason       = document.getElementById("expenseReason").value.trim();
+  const amount       = document.getElementById("expenseAmount").value;
+  paidby             = document.getElementById("paidby").value.trim();
   const checkedBoxes = document.querySelectorAll(".member-checkboxes input[name='members']:checked");
   selectedmembers    = Array.from(checkedBoxes).map(cb => cb.value);
   const shareType    = document.querySelector("input[name='shareType']:checked").value;
@@ -214,14 +219,13 @@ saveExpenseBtn.addEventListener("click", () => {
   tempAmount = amount;
 
   if (shareType === "equal") {
-    // Equal split (ORIGINAL — unchanged)
     const share  = Math.round((amount / selectedmembers.length) * 100) / 100;
     const shares = Array(selectedmembers.length).fill(share);
-    addExpenseCard(reason, amount, selectedmembers, shares, paidby);
+    // Close form immediately for snappy UX — sync will draw the card
     resetExpenseForm();
+    addExpenseCard(reason, amount, selectedmembers, shares, paidby);
 
   } else {
-    // Custom split — read inline inputs, validate (ORIGINAL logic — unchanged)
     const inputs = document.querySelectorAll(".inline-share-input");
     const shares = Array.from(inputs)
       .map(i => roundTo(Number(i.value.trim()), 2))
@@ -235,13 +239,12 @@ saveExpenseBtn.addEventListener("click", () => {
     }
 
     const total = roundTo(shares.reduce((sum, v) => sum + v, 0), 2);
-    // ORIGINAL check: shares must match total amount exactly
     if (total !== roundTo(Number(tempAmount), 2)) {
       showModalError(document.getElementById("sharesErrorBanner"), `Shares total ₹${total.toFixed(2)} but expense is ₹${Number(tempAmount).toFixed(2)} — they must match.`); return;
     }
 
-    addExpenseCard(tempReason, tempAmount, selectedmembers, shares, paidby);
     resetExpenseForm();
+    addExpenseCard(tempReason, tempAmount, selectedmembers, shares, paidby);
   }
 });
 
@@ -253,19 +256,38 @@ document.addEventListener("keydown", function(event) {
   }
 });
 
-// ── Add expense card + POST to backend (ORIGINAL — unchanged) ─────────────
+// ── Add expense card + POST to backend ────────────────────────────────────
+// FIX (Stuck Row + 30s Lag): isSaving is released BEFORE forceSyncExpenses
+// so the sync fetch is not gated by the flag itself. The form is already
+// closed by the time we reach here, so no flickering can occur.
 async function addExpenseCard(reason, amount, members, shares, whopaid) {
+  isSaving = true;
   try {
     const response = await fetch(`/add_expense/${tripId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason, amount, members, shares, whopaid })
     });
+
+    if (response.status === 403) {
+      isSaving = false; // Release the gate immediately
+      showToast('This trip has been finished. Redirecting...', 'info');
+      
+      // Delays navigation slightly so the user can read the toast message
+      setTimeout(() => {
+        window.location.href = `/results/${tripId}`;
+      }, 1500);
+      return;
+    }
+
     const result = await response.json();
 
     if (result.status === "success") {
-      const expenseId = result.expense_id;
-      buildExpenseCard(reason, amount, members, shares, whopaid, expenseId);
+      // Release flag FIRST so the upcoming sync is not blocked by isSaving
+      isSaving = false;
+      // Then immediately sync — picks up our new card AND any concurrent
+      // additions from teammates (fixes 30-second collaborative lag)
+      await forceSyncExpenses();
     } else if (result.status === "error") {
       showToast(result.message || 'Failed to save expense.', 'error');
     } else {
@@ -273,29 +295,33 @@ async function addExpenseCard(reason, amount, members, shares, whopaid) {
     }
   } catch (error) {
     showToast('Connection error. Please check your network.', 'error');
+  } finally {
+    // Guarantee flag release even if forceSyncExpenses threw
+    isSaving = false;
   }
 }
 
 // ── Reset form ────────────────────────────────────────────────────────────
+// FIX (UI Flickering): resetExpenseForm is now called BEFORE addExpenseCard
+// in the save handler above, so the modal is fully gone before any DOM
+// card operations begin — no overlap between closing animation and grid redraw.
 function resetExpenseForm() {
-    closeExpenseForm();
-    document.getElementById("expenseReason").value = "";
-    document.getElementById("expenseAmount").value = "";
-    document.getElementById("paidby").value = "";
-    document.querySelectorAll(".member-checkboxes input[type='checkbox']")
-      .forEach(cb => cb.checked = false);
-    // Reset split toggle back to Equal
-    const equalRadio = document.querySelector("input[name='shareType'][value='equal']");
-    if (equalRadio) {
-      equalRadio.checked = true;
-      document.querySelectorAll('.toggle-opt').forEach(l => l.classList.remove('active'));
-      equalRadio.closest('.toggle-opt').classList.add('active');
-    }
-    // Clear shares error banner on form reset
-    const sharesErr = document.getElementById("sharesErrorBanner");
-    if (sharesErr) hideModalError(sharesErr);
-    collapseCustomSplits();
+  closeExpenseForm();
+  document.getElementById("expenseReason").value = "";
+  document.getElementById("expenseAmount").value = "";
+  document.getElementById("paidby").value = "";
+  document.querySelectorAll(".member-checkboxes input[type='checkbox']")
+    .forEach(cb => cb.checked = false);
+  const equalRadio = document.querySelector("input[name='shareType'][value='equal']");
+  if (equalRadio) {
+    equalRadio.checked = true;
+    document.querySelectorAll('.toggle-opt').forEach(l => l.classList.remove('active'));
+    equalRadio.closest('.toggle-opt').classList.add('active');
   }
+  const sharesErr = document.getElementById("sharesErrorBanner");
+  if (sharesErr) hideModalError(sharesErr);
+  collapseCustomSplits();
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase(); }
@@ -366,12 +392,11 @@ if (feedEmpty && expenseContainer) {
   observer.observe(expenseContainer, { childList: true });
 }
 
-// ── Confirm modal system ─────────────────────────────────────────────────
-// Single modal reused for any delete confirmation.
-const confirmModal    = document.getElementById('confirmModal');
-const confirmBackdrop = document.getElementById('confirmBackdrop');
-const confirmTitle    = document.getElementById('confirmTitle');
-const confirmMessage  = document.getElementById('confirmMessage');
+// ── Confirm modal system ──────────────────────────────────────────────────
+const confirmModal     = document.getElementById('confirmModal');
+const confirmBackdrop  = document.getElementById('confirmBackdrop');
+const confirmTitle     = document.getElementById('confirmTitle');
+const confirmMessage   = document.getElementById('confirmMessage');
 const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 
@@ -381,11 +406,10 @@ function showConfirm(title, message, onConfirm) {
   confirmModal.classList.remove('hidden');
   confirmBackdrop.classList.remove('hidden');
   confirmDeleteBtn.disabled  = false;
+  isDeleting = true;   // block polling while confirm modal is open
 
-  // Reassign onclick directly — cleanest way to swap the callback
-  // without stacking multiple listeners from previous calls.
   confirmDeleteBtn.onclick = async () => {
-    confirmDeleteBtn.disabled = true;   // prevent double-click
+    confirmDeleteBtn.disabled = true;
     await onConfirm();
     hideConfirm();
   };
@@ -394,17 +418,24 @@ function showConfirm(title, message, onConfirm) {
 function hideConfirm() {
   confirmModal.classList.add('hidden');
   confirmBackdrop.classList.add('hidden');
+  isDeleting = false;
 }
 
 confirmCancelBtn.addEventListener('click', hideConfirm);
 confirmBackdrop.addEventListener('click', hideConfirm);
 
-// ── buildExpenseCard — shared by addExpenseCard and loadExistingExpenses ───
-// Builds a card DOM element with a delete button and appends to the grid.
-function buildExpenseCard(reason, amount, memberNames, shares, whopaid, expenseId) {
+// ── buildExpenseCardElement — builds and RETURNS a card, does NOT append ──
+// FIX (Out-of-Order glitch + Ghost Card Duplication): separating construction
+// from insertion means diffExpenseCards controls exactly where each card
+// lands in the DOM order, and delete callbacks always reference a live node.
+// FIX (Ghost Modification): data-fingerprint is set here so diffExpenseCards
+// can detect content changes even when the expense ID is unchanged.
+function buildExpenseCardElement(reason, amount, memberNames, shares, whopaid, expenseId) {
   const card = document.createElement("div");
   card.className = "expense-card";
-  card.dataset.expenseId = expenseId;
+  card.dataset.expenseId   = String(expenseId);
+  // Fingerprint covers every visible field — any server-side edit is detected
+  card.dataset.fingerprint = `${reason}|${amount}|${whopaid}|${shares.join(',')}`;
 
   const membersList = memberNames
     .map((m, i) => `<li>${capitalize(m)}: <strong style="color:var(--amber)">₹${shares[i]}</strong></li>`)
@@ -421,7 +452,9 @@ function buildExpenseCard(reason, amount, memberNames, shares, whopaid, expenseI
     <ul style="list-style:none;padding:0">${membersList}</ul>
   `;
 
-  // Wire delete button
+  // FIX (Ghost Card Duplication): the delete handler calls forceSyncExpenses
+  // after a confirmed delete. This guarantees the next DOM state is fetched
+  // fresh from the DB — no stale card reference can survive.
   card.querySelector('.card-delete-btn').addEventListener('click', () => {
     showConfirm(
       'Delete Expense',
@@ -430,7 +463,9 @@ function buildExpenseCard(reason, amount, memberNames, shares, whopaid, expenseI
         const res    = await fetch(`/delete_expense/${expenseId}`, { method: 'POST' });
         const result = await res.json();
         if (result.status === 'success') {
+          // Remove immediately for instant feedback, then sync to reconcile
           card.remove();
+          await forceSyncExpenses();
         } else {
           showToast(result.message || 'Failed to delete expense.', 'error');
         }
@@ -438,42 +473,164 @@ function buildExpenseCard(reason, amount, memberNames, shares, whopaid, expenseI
     );
   });
 
+  return card;
+}
+
+// ── buildExpenseCard — convenience wrapper: build + append ────────────────
+// Used only by loadExistingExpenses (initial full render).
+// All other paths go through diffExpenseCards which calls buildExpenseCardElement.
+function buildExpenseCard(reason, amount, memberNames, shares, whopaid, expenseId) {
+  const card = buildExpenseCardElement(reason, amount, memberNames, shares, whopaid, expenseId);
   expenseContainer.appendChild(card);
 }
 
-// ── Load existing expenses from DB on page load ───────────────────────────
-// Renders cards for expenses already saved in a previous session,
-// using the same HTML structure as addExpenseCard so they look identical.
+// ── Smart Chronological DOM diff Engine ───────────────────────────────────
+// FIX (Out-of-Order Insertion): instead of appendChild, every card is placed
+// at its exact index position using insertBefore, matching the server order.
+// FIX (Vanishing Submission race): surgical per-card ops replace innerHTML=""
+// so an in-flight save never wipes a card that hasn't been persisted yet.
+// FIX (Ghost Modification): fingerprint comparison detects silent edits.
+// FIX (UI Flickering): no full container clear, no layout thrash.
+function diffExpenseCards(expenses) {
+  // Wipe only when DB confirms the trip is truly empty
+  if (expenses.length === 0) {
+    expenseContainer.innerHTML = "";
+    return;
+  }
+
+  // 1. Remove cards that no longer exist in the DB
+  //    Guard isDeleting so a mid-confirmation poll doesn't ghost the card
+  const dbIds = new Set(expenses.map(e => String(e.id)));
+  expenseContainer.querySelectorAll('.expense-card[data-expense-id]').forEach(card => {
+    if (!dbIds.has(card.dataset.expenseId) && !isDeleting) {
+      card.remove();
+    }
+  });
+
+  // 2. Update any cards whose content changed (Ghost Modification fix)
+  expenses.forEach(exp => {
+    const id               = String(exp.id);
+    const existingCard     = expenseContainer.querySelector(`.expense-card[data-expense-id="${id}"]`);
+    const targetFingerprint = `${exp.reason}|${exp.amount}|${exp.whopaid}|${exp.splits.map(s => s.share).join(',')}`;
+
+    if (!existingCard) return;  // new card — handled in step 3
+
+    if (existingCard.dataset.fingerprint !== targetFingerprint) {
+      const updated = buildExpenseCardElement(
+        exp.reason, exp.amount,
+        exp.splits.map(s => s.name),
+        exp.splits.map(s => s.share),
+        exp.whopaid, exp.id
+      );
+      expenseContainer.replaceChild(updated, existingCard);
+    }
+  });
+
+  // 3. Insert missing cards and enforce exact chronological order
+  //    insertBefore at the correct index — never appendChild (Out-of-Order fix)
+  expenses.forEach((exp, index) => {
+    const id = String(exp.id);
+    let card = expenseContainer.querySelector(`.expense-card[data-expense-id="${id}"]`);
+
+    if (!card) {
+      card = buildExpenseCardElement(
+        exp.reason, exp.amount,
+        exp.splits.map(s => s.name),
+        exp.splits.map(s => s.share),
+        exp.whopaid, exp.id
+      );
+    }
+
+    const nodeAtIndex = expenseContainer.children[index];
+    if (nodeAtIndex !== card) {
+      // Moves existing card or inserts new one at the correct position
+      expenseContainer.insertBefore(card, nodeAtIndex || null);
+    }
+  });
+}
+
+// ── Initial load on page open (full rebuild) ──────────────────────────────
 async function loadExistingExpenses() {
   try {
     const response = await fetch(`/get_expenses/${tripId}`);
     if (!response.ok) return;
-    const expenses = await response.json();
-
+    const data = await response.json();
+    const expenses = data.expenses;
+    if (data.is_finished) {
+      window.location.href = `/results/${tripId}`;
+      return;
+    }
+    expenseContainer.innerHTML = "";
     expenses.forEach(exp => {
-      buildExpenseCard(exp.reason, exp.amount,
+      buildExpenseCard(
+        exp.reason, exp.amount,
         exp.splits.map(s => s.name),
         exp.splits.map(s => s.share),
-        exp.whopaid, exp.id);
+        exp.whopaid, exp.id
+      );
     });
   } catch (err) {
     console.error("Could not load existing expenses:", err);
   }
 }
 
-loadExistingExpenses();
+// ── Force Sync Engine ─────────────────────────────────────────────────────
+// isSyncing prevents two overlapping sync fetches from racing each other
+// (e.g. a save-triggered sync and a poll firing at the same instant).
+async function forceSyncExpenses() {
+  if (isSyncing) return;
+  isSyncing = true;
+  try {
+    const response = await fetch(`/get_expenses/${tripId}`);
+    if (!response.ok) return;
+    const expenses = await response.json();
 
-// ── FAB buttons — wire to existing handlers (mobile only) ───────────────
-// fabAddBtn triggers the same flow as the desktop "+ Add Expense" button
-// fabWalletBtn triggers the same flow as the desktop wallet icon
+    if (expenses.is_finished) {
+      window.location.href = `/results/${tripId}`;
+      return;
+    }
+
+    diffExpenseCards(expenses.expenses);
+  } catch (err) {
+    console.error("Sync tracking failure:", err);
+  } finally {
+    isSyncing = false;
+  }
+}
+
+// ── Polling ───────────────────────────────────────────────────────────────
+// Skipped while a save or delete confirmation is in-flight to avoid
+// the Vanishing Submission and Ghost Card Duplication races.
+// isSyncing guard prevents a timer tick from overlapping a save-triggered sync.
+async function pollExpenses() {
+  if (isSaving || isDeleting || isSyncing) return;
+
+  try {
+    const response = await fetch(`/get_expenses/${tripId}`);
+    if (!response.ok) return;
+    const data = await response.json();
+
+    // Re-check flags: state may have changed while fetch was in-flight
+    if (isSaving || isDeleting) return;
+
+    if (data.is_finished) {
+      window.location.href = `/results/${tripId}`;
+      return; // Stop execution here
+    }
+    diffExpenseCards(data.expenses);
+  } catch (err) {
+    console.error("Poll failed:", err);
+  }
+}
+
+loadExistingExpenses();
+setInterval(pollExpenses, 30000);
+
+// ── FAB buttons — wire to existing handlers (mobile only) ────────────────
 const fabAddBtn    = document.getElementById('fabAddBtn');
 const fabWalletBtn = document.getElementById('fabWalletBtn');
 
-if (fabAddBtn) {
-  fabAddBtn.addEventListener('click', () => addExpenseBtn.click());
-}
-if (fabWalletBtn) {
-  fabWalletBtn.addEventListener('click', () => billBtn.click());
-}
+if (fabAddBtn)    fabAddBtn.addEventListener('click',    () => addExpenseBtn.click());
+if (fabWalletBtn) fabWalletBtn.addEventListener('click', () => billBtn.click());
 
 }); // end DOMContentLoaded

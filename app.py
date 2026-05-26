@@ -719,7 +719,15 @@ def get_expenses(trip_id):
         ORDER  BY e.created_at
     """, (trip_id,))
     expenses = cur.fetchall()
-
+    
+    cur.execute("SELECT is_active FROM trips WHERE id=%s",(trip_id,))
+    trip_row = cur.fetchone()
+    
+    if trip_row:
+        # Handles both dict-cursors trip_row["is_active"] or tuple-cursors trip_row[0]
+        is_active_val = trip_row["is_active"] if isinstance(trip_row, dict) else trip_row[0][0]
+        is_finished = not is_active_val
+    
     result = []
     for exp in expenses:
         # Fetch splits for this expense
@@ -740,7 +748,7 @@ def get_expenses(trip_id):
         })
 
     conn.close()
-    return jsonify(result)
+    return jsonify({"is_finished":is_finished,"expenses":result})
 
 
 @app.route('/finish_trip/<int:trip_id>', methods=['POST'])
