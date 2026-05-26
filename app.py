@@ -9,29 +9,49 @@ from flask_limiter.util import get_remote_address
 from functools import wraps
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 import os
 from dotenv import load_dotenv
 load_dotenv()
-# ── DB helper ────────────────────────────────────────────────────────────────
+# ── DB connection pool ────────────────────────────────────────────────────────
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
+connection_pool = psycopg2.pool.SimpleConnectionPool(1, 10, DATABASE_URL)
+
 def get_db():
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    conn = connection_pool.getconn()
+    conn.cursor_factory = psycopg2.extras.RealDictCursor
     return conn
+
+def release_db(conn):
+    connection_pool.putconn(conn)
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY")
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
+# ── Secure session cookies ────────────────────────────────────────────────────
+app.config['SESSION_COOKIE_SECURE']   = True   # only send cookie over HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True   # JS can't read the cookie
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
 # Session stores: user_id, username only.
 # trip_id now lives in the URL, not the session.
 limiter = Limiter(
     get_remote_address,               # Identifies users by their IP address
     app=app,
     default_limits=["200 per day"],   # Global fallback limit for all routes
-    storage_uri="memory://"           # Keeps limits in server memory (fast & simple)
+    storage_uri="memory://"           # NOTE: resets on restart & not shared across
+                                      # multiple workers. Upgrade to Redis if you
+                                      # scale beyond a single Render dyno.
 )
+
+# ── Security headers ──────────────────────────────────────────────────────────
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    return response
 
 # =========================================================
 # ── AUTH DECORATOR ────────────────────────────────────────
@@ -69,7 +89,7 @@ def check_trip_access(trip_id, user_id, conn=None):
     """, (trip_id, user_id))
     row = cur.fetchone()
     if close_after:
-        conn.close()
+        release_db(conn)
     return row
 
 
@@ -86,7 +106,7 @@ def is_trip_creator(trip_id, user_id, conn=None):
     )
     row = cur.fetchone()
     if close_after:
-        conn.close()
+        release_db(conn)
     return row is not None
 
 
@@ -105,7 +125,7 @@ def create_trip(trip_name, user_id):
     )
     trip_id = cur.fetchone()['id']
     conn.commit()
-    conn.close()
+    release_db(conn)
     return trip_id
 
 
@@ -119,7 +139,7 @@ def add_members_to_db(trip_id, members):
             (trip_id, m)
         )
     conn.commit()
-    conn.close()
+    release_db(conn)
 
 
 def process_expense(data, trip_id):
@@ -142,7 +162,7 @@ def process_expense(data, trip_id):
     )
     payer_row = cur.fetchone()
     if not payer_row:
-        conn.close()
+        release_db(conn)
         raise ValueError(f"Payer '{payer_name}' not found in trip {trip_id}")
     payer_id = payer_row["id"]
 
@@ -159,7 +179,7 @@ def process_expense(data, trip_id):
         )
         member_row = cur.fetchone()
         if not member_row:
-            conn.close()
+            release_db(conn)
             raise ValueError(f"Member '{person_name}' not found in trip {trip_id}")
         cur.execute(
             "INSERT INTO expense_splits (expense_id, member_id, share_amount) VALUES (%s, %s, %s)",
@@ -167,7 +187,7 @@ def process_expense(data, trip_id):
         )
 
     conn.commit()
-    conn.close()
+    release_db(conn)
     return expense_id   # returned so route can pass it to JS
 
 
@@ -246,7 +266,7 @@ def calculate_results(trip_id):
     cur.execute("SELECT id, name FROM members WHERE trip_id = %s", (trip_id,))
     member_rows = cur.fetchall()
     if not member_rows:
-        conn.close()
+        release_db(conn)
         return None, None, None
 
     members      = [r["name"] for r in member_rows]
@@ -288,7 +308,7 @@ def calculate_results(trip_id):
 
         transactions.append(paymentdetails)
 
-    conn.close()
+    release_db(conn)
 
     printed     = set()
     raw_pay_data=[]
@@ -354,7 +374,7 @@ def login():
             cur  = conn.cursor()
             cur.execute("SELECT * FROM users WHERE username = %s", (username,))
             user = cur.fetchone()
-            conn.close()
+            release_db(conn)
 
             if not user or not check_password_hash(user['password_hash'], password):
                 error = "Invalid username or password."
@@ -383,6 +403,10 @@ def signup():
 
         if not username or not email or not password or not confirm:
             error = "Please fill in all fields."
+        elif len(username) > 50:
+            error = "Username must be 50 characters or fewer."
+        elif len(email) > 254:
+            error = "Email address is too long."
         elif password != confirm:
             error = "Passwords do not match."
         elif len(password) < 6:
@@ -397,7 +421,7 @@ def signup():
             )
             if cur.fetchone():
                 error = "Username or email already taken."
-                conn.close()
+                release_db(conn)
             else:
                 cur.execute(
                     "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s) RETURNING id",
@@ -405,7 +429,7 @@ def signup():
                 )
                 user_id = cur.fetchone()['id']
                 conn.commit()
-                conn.close()
+                release_db(conn)
 
                 session.clear()
                 session['user_id']  = user_id
@@ -459,7 +483,7 @@ def home():
     """, (user_id,))
     pending_invites = [dict(r) for r in cur.fetchall()]
 
-    conn.close()
+    release_db(conn)
 
     return render_template('home.html',
                            username=session['username'],
@@ -476,6 +500,7 @@ def home():
 
 @app.route('/search_users')
 @login_required
+@limiter.limit("20 per minute")
 def search_users():
     """
     Returns usernames matching the query string (for dropdown suggestions).
@@ -493,7 +518,7 @@ def search_users():
         LIMIT  8
     """, (f'%{q}%',))
     results = [r['username'] for r in cur.fetchall()]
-    conn.close()
+    release_db(conn)
     return jsonify(results)
 
 @app.route('/create_trip', methods=['POST'])
@@ -517,6 +542,8 @@ def create_trip_route():
 
     if not trip_name:
         return jsonify({"error": "Trip name is required"}), 400
+    if len(trip_name) > 100:
+        return jsonify({"error": "Trip name must be 100 characters or fewer"}), 400
     if not members or len(members) < 1:
         return jsonify({"error": "At least one member is required"}), 400
 
@@ -605,10 +632,10 @@ def create_trip_route():
         conn.commit()
     except Exception as e:
         conn.rollback()
-        conn.close()
+        release_db(conn)
         return jsonify({"error": str(e)}), 500
     finally:
-        conn.close()
+        release_db(conn)
 
     return jsonify({"message": "Trip created!", "trip_id": trip_id})
 
@@ -645,7 +672,7 @@ def dashboard(trip_id):
     cur  = conn.cursor()
     cur.execute("SELECT name FROM members WHERE trip_id = %s", (trip_id,))
     members = [r["name"] for r in cur.fetchall()]
-    conn.close()
+    release_db(conn)
 
     is_creator = is_trip_creator(trip_id, user_id)
     return render_template('dashboard.html',
@@ -667,6 +694,8 @@ def add_expense(trip_id):
 
     if not all(k in data for k in ["reason", "amount", "members", "shares", "whopaid"]):
         return jsonify({"status": "error", "message": "Missing fields"}), 400
+    if len(data.get("reason", "")) > 200:
+        return jsonify({"status": "error", "message": "Expense description must be 200 characters or fewer"}), 400
 
     trip = check_trip_access(trip_id, user_id)
     if not trip:
@@ -707,7 +736,7 @@ def get_expenses(trip_id):
 
     # Access check via trip_users
     if not check_trip_access(trip_id, user_id):
-        conn.close()
+        release_db(conn)
         return jsonify([])
 
     # Fetch each expense with payer name
@@ -747,7 +776,7 @@ def get_expenses(trip_id):
             "splits":  [{"name": s["member_name"], "share": s["share_amount"]} for s in splits]
         })
 
-    conn.close()
+    release_db(conn)
     return jsonify({"is_finished":is_finished,"expenses":result})
 
 
@@ -761,7 +790,7 @@ def finish_trip(trip_id):
 
     # Only creator can finish a trip
     if not is_trip_creator(trip_id, user_id):
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": "Only the trip creator can finish this trip"}), 403
 
     cur.execute(
@@ -769,7 +798,7 @@ def finish_trip(trip_id):
         (trip_id,)
     )
     conn.commit()
-    conn.close()
+    release_db(conn)
 
     return jsonify({"status": "success"})
 
@@ -815,12 +844,12 @@ def generate_share_qr(trip_id):
     cur = conn.cursor()
     cur.execute("SELECT share_token FROM trips WHERE id = %s", (trip_id,))
     trip_data = cur.fetchone()
-    conn.close()
+    release_db(conn)
     
     if not trip_data or not trip_data['share_token']:
         return jsonify({"error": "Share token not available"}), 404
 
-    share_url = f"http://127.0.0.1:5000/public-results/{trip_data['share_token']}"
+    share_url = f"{os.environ.get('BASE_URL', 'http://127.0.0.1:5000')}/public-results/{trip_data['share_token']}"
     
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(share_url)
@@ -843,7 +872,7 @@ def public_results(token):
     cur = conn.cursor()
     cur.execute("SELECT id, trip_name FROM trips WHERE share_token = %s", (token,))
     trip = cur.fetchone()
-    conn.close()
+    release_db(conn)
 
     if not trip:
         return "Trip not found or invalid link.", 404
@@ -903,10 +932,10 @@ def accept_invite(trip_id):
     row = cur.fetchone()
 
     if not row:
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": "Invite not found"}), 404
     if row['status'] != 'pending':
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": "Invite already responded to"}), 400
 
     # Check alias uniqueness in this trip
@@ -915,7 +944,7 @@ def accept_invite(trip_id):
         (trip_id, alias)
     )
     if cur.fetchone():
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": f"Alias '{alias}' is already taken in this trip"}), 400
 
     try:
@@ -933,10 +962,10 @@ def accept_invite(trip_id):
         conn.commit()
     except Exception as e:
         conn.rollback()
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
-        conn.close()
+        release_db(conn)
 
     return jsonify({"status": "success"})
 
@@ -960,10 +989,10 @@ def reject_invite(trip_id):
     row = cur.fetchone()
 
     if not row:
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": "Invite not found"}), 404
     if row['status'] != 'pending':
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": "Invite already responded to"}), 400
 
     try:
@@ -974,10 +1003,10 @@ def reject_invite(trip_id):
         conn.commit()
     except Exception as e:
         conn.rollback()
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
-        conn.close()
+        release_db(conn)
 
     return jsonify({"status": "success"})
 
@@ -1012,10 +1041,10 @@ def delete_trip(trip_id):
         conn.commit()
     except Exception as e:
         conn.rollback()
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
-        conn.close()
+        release_db(conn)
 
     return jsonify({"status": "success"})
 
@@ -1078,10 +1107,10 @@ def leave_trip(trip_id):
         conn.commit()
     except Exception as e:
         conn.rollback()
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
-        conn.close()
+        release_db(conn)
 
     return jsonify({"status": "success"})
 
@@ -1109,11 +1138,11 @@ def delete_expense(expense_id):
     row = cur.fetchone()
 
     if not row:
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": "Expense not found or unauthorized"}), 404
 
     if not row['is_active']:
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": "Cannot edit a finished trip"}), 403
 
     try:
@@ -1123,10 +1152,10 @@ def delete_expense(expense_id):
         conn.commit()
     except Exception as e:
         conn.rollback()
-        conn.close()
+        release_db(conn)
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
-        conn.close()
+        release_db(conn)
 
     return jsonify({"status": "success"})
 
@@ -1158,4 +1187,4 @@ def internal_server_error(e):
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
