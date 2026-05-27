@@ -3,6 +3,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import qrcode
 import io
 import base64
+import redis
 from datetime import timedelta 
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -41,7 +42,7 @@ limiter = Limiter(
     get_remote_address,               # Identifies users by their IP address
     app=app,
     default_limits=["200 per day"],   # Global fallback limit for all routes
-    storage_uri="memory://"           # NOTE: resets on restart & not shared across
+    storage_uri=os.environ.get("REDIS_URL", "memory://")          # NOTE: resets on restart & not shared across
                                       # multiple workers. Upgrade to Redis if you
                                       # scale beyond a single Render dyno.
 )

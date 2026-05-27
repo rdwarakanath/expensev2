@@ -12,3 +12,5 @@ blinker==1.9.0
 click==8.3.1
 qrcode==8.2
 pillow==12.2.0
+redis==5.0.3
+flask-limiter[redis]==4.1.1
