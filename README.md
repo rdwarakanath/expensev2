@@ -4,7 +4,32 @@ PayBait is a full-stack trip expense manager designed for collaborative group us
 
 Built with a **Python/Flask** backend, a **PostgreSQL** relational database with optimised indexing, and a glassmorphic frontend in Vanilla CSS and ES6 JavaScript.
 
+**Live Demo**: [paybait.onrender.com](https://paybait.onrender.com)
 ---
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><b>Login</b></td>
+    <td align="center"><b>InvitePanel</b></td>
+    <td align="center"><b>Dashboard</b></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/login.png" width="220"/></td>
+    <td><img src="screenshots/invite.png" width="220"/></td>
+    <td><img src="screenshots/dashboard.png" width="220"/></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Expense Entry</b></td>
+    <td align="center"><b>Results & Settlement</b></td>
+    <td align="center"><b>QR Share</b></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/expense.png" width="220"/></td>
+    <td><img src="screenshots/results.png" width="220"/></td>
+    <td><img src="screenshots/qr.png" width="220"/></td>
+  </tr>
+</table>
 
 ## Key Features
 
@@ -56,10 +81,10 @@ PayBait generates a secure public token for each trip, rendering an on-demand ba
 
 - **Framework**: Flask, configured for standard production environments.
 - **Session Management**: Permanent session lifetimes of two hours, with automated refresh on active requests.
-- **Rate Limiting**: Flask-Limiter with in-memory storage. Custom rate limits are applied to critical routes (login, signup, autocomplete) to mitigate brute-force and denial-of-service attempts.
+- **Rate Limiting**: Flask-Limiter backed by **Redis** (Render Key Value) for persistent, process-safe rate limit state. Custom limits are applied to critical routes (login, signup, user autocomplete) to mitigate brute-force and denial-of-service attempts.
 - **WSGI Server**: Gunicorn with worker processes calculated as `(2 × CPU cores) + 1`.
 
-### Database Schema — PostgreSQL
+### Database Schema — Supabase PostgreSQL
 
 A fully indexed relational schema with the following tables:
 
@@ -83,7 +108,7 @@ All foreign keys are explicitly indexed to optimise lookup performance on nested
   - `X-Frame-Options: DENY` — prevents clickjacking via iframe embedding.
 - **SQL Injection Prevention**: No raw SQL string interpolation. All database interactions use parameterised queries via `psycopg2`.
 - **Password Storage**: Plaintext passwords are never stored. Passwords are hashed using PBKDF2-HMAC via `werkzeug.security`.
-- **Connection Pool Management**: A `psycopg2.pool.SimpleConnectionPool` is used, bounded between 1 and 10 connections, to prevent database resource exhaustion.
+- **Connection Pool Management**: A `psycopg2.pool.SimpleConnectionPool` is used, bounded between 1 and 10 connections, to prevent database resource exhaustion. The pool issues a keepalive ping every 30 seconds to maintain live connections against **Supabase PostgreSQL**'s idle timeout, avoiding stale connection errors under low traffic.
 - **Authorisation Decorators**: `check_trip_access` and `is_trip_creator` decorators run on every relevant request, verifying that the requesting user's invitation status is `accepted` before any private trip data is served.
 
 ---
@@ -226,5 +251,5 @@ Gunicorn reads the CPU count, spawns the appropriate number of worker processes,
 ## Planned Improvements
 
 1. **Multi-Currency Support** — Live exchange rate integration for international travel groups.
-2. **Distributed Rate Limiting** — Migrating Flask-Limiter storage to Redis to support horizontally scaled deployments.
+2. **Horizontal Scaling** — Gunicorn worker count currently optimised for a single Render dyno. Redis-backed rate limiting is already in place, so the architecture is ready for multi-instance deployment when needed.
 3. **Receipt OCR** — Automated item parsing from photographed bills using a machine learning pipeline.

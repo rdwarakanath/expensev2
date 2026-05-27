@@ -8,7 +8,7 @@ bind = f"0.0.0.0:{port}"
 
 # The number of worker processes for handling requests.
 # Standard formula for web workers is (2 * CPU cores) + 1.
-workers = (multiprocessing.cpu_count() * 2) + 1
+workers = 2
 
 # Timeout for workers before restarting (in seconds)
 timeout = 120

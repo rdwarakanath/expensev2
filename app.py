@@ -17,7 +17,13 @@ load_dotenv()
 # ── DB connection pool ────────────────────────────────────────────────────────
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-connection_pool = psycopg2.pool.SimpleConnectionPool(1, 10, DATABASE_URL)
+connection_pool = psycopg2.pool.SimpleConnectionPool(
+    1, 4, DATABASE_URL,
+    keepalives=1,
+    keepalives_idle=30,
+    keepalives_interval=10,
+    keepalives_count=5
+)
 
 def get_db():
     conn = connection_pool.getconn()
